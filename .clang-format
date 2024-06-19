@@ -1,0 +1,11 @@
+BasedOnStyle: Google
+DerivePointerAlignment: false
+PointerAlignment: Left
+Cpp11BracedListStyle: true
+IndentCaseLabels: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortLoopsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: false
+Standard: c++14
+SpaceAfterCStyleCast: true
+AlignAfterOpenBracket: Align
