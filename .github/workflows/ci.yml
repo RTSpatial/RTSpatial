@@ -1,0 +1,33 @@
+name: C++ CI
+
+on: [ push, pull_request ]
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Build Debug
+        run: |
+          mkdir debug
+          cd debug
+          cmake .. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=/home/geng.161/.local/NVIDIA-OptiX-SDK-8.0.0-linux64-x86_64
+          make
+      - name: Test Debug
+        run: |
+          cd debug
+          ./bin/rtspatial_tests
+
+      - name: Build Release
+        run: |
+          mkdir release
+          cd release
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/home/geng.161/.local/NVIDIA-OptiX-SDK-8.0.0-linux64-x86_64
+          make
+      - name: Test Release
+        run: |
+          cd release
+          ./bin/rtspatial_tests
+
