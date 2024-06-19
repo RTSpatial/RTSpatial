@@ -107,7 +107,7 @@ class Module {
 struct RTConfig {
   RTConfig()
       : max_reg_count(0),
-        max_traversable_depth(0),
+        max_traversable_depth(2), // IAS+GAS
         max_trace_depth(2),
         opt_level(OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         dbg_level(OPTIX_COMPILE_DEBUG_LEVEL_NONE),
