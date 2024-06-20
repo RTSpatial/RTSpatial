@@ -400,7 +400,7 @@ void RTEngine::buildSBT(const RTConfig& config) {
 
 OptixTraversableHandle RTEngine::buildAccel(
     cudaStream_t cuda_stream, ArrayView<OptixAabb> aabbs,
-    thrust::device_vector<unsigned char>& output_buf) {
+    thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build) {
   OptixTraversableHandle traversable;
   OptixBuildInput build_input = {};
   CUdeviceptr d_aabb = THRUST_TO_CUPTR(aabbs.data());
@@ -424,8 +424,11 @@ OptixTraversableHandle RTEngine::buildAccel(
   build_input.customPrimitiveArray.primitiveIndexOffset = 0;
 
   OptixAccelBuildOptions accelOptions = {};
-  accelOptions.buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
-
+  if (prefer_fast_build) {
+    accelOptions.buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
+  } else {
+    accelOptions.buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+  }
   accelOptions.motionOptions.numKeys = 1;
   accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
 
@@ -448,7 +451,7 @@ OptixTraversableHandle RTEngine::buildAccel(
 
 OptixTraversableHandle RTEngine::buildInstanceAccel(
     cudaStream_t cuda_stream, ArrayView<OptixInstance> instances,
-    thrust::device_vector<unsigned char>& output_buf) {
+    thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build) {
   OptixTraversableHandle traversable;
   OptixBuildInput build_input = {};
 
@@ -458,7 +461,11 @@ OptixTraversableHandle RTEngine::buildInstanceAccel(
   build_input.instanceArray.numInstances = instances.size();
 
   OptixAccelBuildOptions accelOptions = {};
-  accelOptions.buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
+  if (prefer_fast_build) {
+    accelOptions.buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
+  } else {
+    accelOptions.buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+  }
   accelOptions.motionOptions.numKeys = 1;
   accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
 

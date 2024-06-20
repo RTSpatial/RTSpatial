@@ -107,7 +107,7 @@ class Module {
 struct RTConfig {
   RTConfig()
       : max_reg_count(0),
-        max_traversable_depth(2), // IAS+GAS
+        max_traversable_depth(2),  // IAS+GAS
         max_trace_depth(2),
         opt_level(OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         dbg_level(OPTIX_COMPILE_DEBUG_LEVEL_NONE),
@@ -158,13 +158,15 @@ class RTEngine {
 
   OptixTraversableHandle BuildAccelCustom(
       cudaStream_t cuda_stream, ArrayView<OptixAabb> aabbs,
-      thrust::device_vector<unsigned char>& output_buf) {
-    return buildAccel(cuda_stream, aabbs, output_buf);
+      thrust::device_vector<unsigned char>& output_buf,
+      bool prefer_fast_build = false) {
+    return buildAccel(cuda_stream, aabbs, output_buf, prefer_fast_build);
   }
 
   OptixTraversableHandle BuildInstanceAccel(
       cudaStream_t cuda_stream, std::vector<OptixTraversableHandle>& handles,
-      thrust::device_vector<unsigned char>& output_buf) {
+      thrust::device_vector<unsigned char>& output_buf,
+      bool prefer_fast_build = false) {
     tmp_h_instances_.resize(handles.size());
 
     for (size_t i = 0; i < handles.size(); i++) {
@@ -176,8 +178,9 @@ class RTEngine {
       tmp_h_instances_[i].visibilityMask = 255;
     }
     tmp_instances_ = tmp_h_instances_;
-    return buildInstanceAccel(
-        cuda_stream, ArrayView<OptixInstance>(tmp_instances_), output_buf);
+    return buildInstanceAccel(cuda_stream,
+                              ArrayView<OptixInstance>(tmp_instances_),
+                              output_buf, prefer_fast_build);
   }
 
   void Render(cudaStream_t cuda_stream, ModuleIdentifier mod, dim3 dim);
@@ -220,11 +223,11 @@ class RTEngine {
 
   OptixTraversableHandle buildAccel(
       cudaStream_t cuda_stream, ArrayView<OptixAabb> aabbs,
-      thrust::device_vector<unsigned char>& output_buf);
+      thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
 
   OptixTraversableHandle buildInstanceAccel(
       cudaStream_t cuda_stream, ArrayView<OptixInstance> instances,
-      thrust::device_vector<unsigned char>& output_buf);
+      thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
 
   OptixTraversableHandle updateAccel(
       cudaStream_t cuda_stream, OptixTraversableHandle handle,

@@ -108,7 +108,6 @@ class SpatialIndex {
                  envelopes.end(), envelopes_.begin());
     details::FillAABBs(cuda_stream, envelopes, aabbs_);
     details::FillRayParams(cuda_stream, aabbs_, ray_params_);
-    // TODO: Prefer fast trace here, and prefer fast build for queries
     auto handle = rt_engine_.BuildAccelCustom(
         cuda_stream, ArrayView<OptixAabb>(aabbs_), gas_buf_);
 
@@ -191,7 +190,8 @@ class SpatialIndex {
 
     sw.start();
     auto handle_queries = rt_engine_.BuildAccelCustom(
-        cuda_stream, ArrayView<OptixAabb>(aabbs_queries_), gas_buf_queries_);
+        cuda_stream, ArrayView<OptixAabb>(aabbs_queries_), gas_buf_queries_,
+        true);
     CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
     sw.stop();
     t_build_bvh = sw.ms();
