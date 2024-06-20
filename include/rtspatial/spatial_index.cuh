@@ -17,12 +17,12 @@ namespace details {
 template <typename COORD_T, int N_DIMS>
 void FillAABBs(cudaStream_t cuda_stream,
                ArrayView<Envelope<Point<COORD_T, N_DIMS>>> envelopes,
-               thrust::device_vector<OptixAabb>& aabbs) {}
+               device_uvector<OptixAabb>& aabbs) {}
 
 template <>
 void FillAABBs<float, 2>(cudaStream_t cuda_stream,
                          ArrayView<Envelope<Point<float, 2>>> envelopes,
-                         thrust::device_vector<OptixAabb>& aabbs) {
+                         device_uvector<OptixAabb>& aabbs) {
   aabbs.resize(envelopes.size());
   thrust::transform(thrust::cuda::par.on(cuda_stream), envelopes.begin(),
                     envelopes.end(), aabbs.begin(),
@@ -42,7 +42,7 @@ void FillAABBs<float, 2>(cudaStream_t cuda_stream,
 template <>
 void FillAABBs<double, 2>(cudaStream_t cuda_stream,
                           ArrayView<Envelope<Point<double, 2>>> envelopes,
-                          thrust::device_vector<OptixAabb>& aabbs) {
+                          device_uvector<OptixAabb>& aabbs) {
   aabbs.resize(envelopes.size());
   thrust::transform(
       thrust::cuda::par.on(cuda_stream), envelopes.begin(), envelopes.end(),
@@ -61,8 +61,8 @@ void FillAABBs<double, 2>(cudaStream_t cuda_stream,
 
 template <int N_DIMS>
 void FillRayParams(cudaStream_t cuda_stream,
-                   const thrust::device_vector<OptixAabb>& aabbs,
-                   thrust::device_vector<RayParams<N_DIMS>>& ray_params,
+                   const device_uvector<OptixAabb>& aabbs,
+                   device_uvector<RayParams<N_DIMS>>& ray_params,
                    bool inverse = false) {
   ray_params.resize(aabbs.size());
 
@@ -297,17 +297,17 @@ class SpatialIndex {
  private:
   details::RTEngine rt_engine_;
   // for base geometries
-  thrust::device_vector<envelope_t> envelopes_;
-  thrust::device_vector<OptixAabb> aabbs_;
-  thrust::device_vector<ray_params_t> ray_params_;
+  device_uvector<envelope_t> envelopes_;
+  device_uvector<OptixAabb> aabbs_;
+  device_uvector<ray_params_t> ray_params_;
   thrust::device_vector<unsigned char> gas_buf_;
   thrust::device_vector<unsigned char> ias_buf_;
   std::vector<OptixTraversableHandle> gas_handles_;
   OptixTraversableHandle ias_handle_;
   // for queries, updated for every batch of queries
-  thrust::device_vector<OptixAabb> aabbs_queries_;
+  device_uvector<OptixAabb> aabbs_queries_;
   thrust::device_vector<unsigned char> gas_buf_queries_;
-  thrust::device_vector<ray_params_t> ray_params_queries_;
+  device_uvector<ray_params_t> ray_params_queries_;
 };
 
 }  // namespace rtspatial

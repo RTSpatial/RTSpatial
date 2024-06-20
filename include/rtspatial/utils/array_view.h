@@ -12,6 +12,11 @@ class ArrayView {
  public:
   ArrayView() = default;
 
+  template <typename ALLOC_T>
+  ArrayView(const thrust::device_vector<T, ALLOC_T>& vec)
+      : data_(const_cast<T*>(thrust::raw_pointer_cast(vec.data()))),
+        size_(vec.size()) {}
+
   ArrayView(const thrust::device_vector<T>& vec)
       : data_(const_cast<T*>(thrust::raw_pointer_cast(vec.data()))),
         size_(vec.size()) {}
@@ -62,6 +67,6 @@ class ArrayView {
   T* data_{};
   size_t size_{};
 };
-}  // namespace rayjoin
+}  // namespace rtspatial
 
 #endif  // RTSPATIAL_UTILS_ARRAY_VIEW_H
