@@ -240,7 +240,7 @@ pinned_vector<thrust::pair<size_t, size_t>> RunRTSpatialIntersectsEnvelopeQuery(
     const std::string& root_exec,
     const std::vector<Envelope<Point<COORD_T, 2>>>& envelopes,
     const std::vector<Envelope<Point<COORD_T, 2>>>& queries) {
-  SpatialIndex<COORD_T, 2> index;
+  SpatialIndex<COORD_T, 2, true> index;
   Queue<thrust::pair<size_t, size_t>> results;
   thrust::device_vector<Envelope<Point<COORD_T, 2>>> d_envelopes(envelopes);
   thrust::device_vector<Envelope<Point<COORD_T, 2>>> d_queries(queries);
@@ -249,7 +249,8 @@ pinned_vector<thrust::pair<size_t, size_t>> RunRTSpatialIntersectsEnvelopeQuery(
   Stopwatch sw;
 
   index.Init(root_exec);
-  results.Init(envelopes.size() * queries.size() * 0.01);
+  results.Init(
+      std::max(1000u, (uint32_t) (envelopes.size() * queries.size() * 0.01)));
 
   sw.start();
   index.Load(d_envelopes, stream.cuda_stream());
@@ -321,6 +322,15 @@ void RunIntersectsEnvelopeQuery(const std::string& exec_root) {
   }
   //  DumpIntersects(rtree_intersects, "/tmp/rtree_xsects");
   {
+//    envelopes.clear();
+//    queries.clear();
+
+//    Envelope<point_f2d_t> e(point_f2d_t(0, 0), point_f2d_t(1, 1));
+//    Envelope<point_f2d_t> q(point_f2d_t(0.5, 0.5), point_f2d_t(0.8, 0.8));
+//
+//    envelopes.push_back(e);
+//    queries.push_back(q);
+
     auto rtspatial_intersects =
         RunRTSpatialIntersectsEnvelopeQuery(exec_root, envelopes, queries);
     std::cout << "RTSpatial intersects " << rtspatial_intersects.size()

@@ -29,6 +29,8 @@ namespace details {
 enum ModuleIdentifier {
   MODULE_ID_FLOAT_CONTAINS_POINT_QUERY_2D,
   MODULE_ID_DOUBLE_CONTAINS_POINT_QUERY_2D,
+  MODULE_ID_FLOAT_CONTAINS_POINT_QUERY_2D_TRIANGLE,
+  MODULE_ID_DOUBLE_CONTAINS_POINT_QUERY_2D_TRIANGLE,
   MODULE_ID_FLOAT_CONTAINS_ENVELOPE_QUERY_2D,
   MODULE_ID_DOUBLE_CONTAINS_ENVELOPE_QUERY_2D,
   MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D,
@@ -163,6 +165,15 @@ class RTEngine {
     return buildAccel(cuda_stream, aabbs, output_buf, prefer_fast_build);
   }
 
+  OptixTraversableHandle BuildAccelTriangle(
+      cudaStream_t cuda_stream, ArrayView<float3> vertices,
+      ArrayView<uint3> indices,
+      thrust::device_vector<unsigned char>& output_buf,
+      bool prefer_fast_build = false) {
+    return buildAccelTriangle(cuda_stream, vertices, indices, output_buf,
+                              prefer_fast_build);
+  }
+
   OptixTraversableHandle BuildInstanceAccel(
       cudaStream_t cuda_stream, std::vector<OptixTraversableHandle>& handles,
       thrust::device_vector<unsigned char>& output_buf,
@@ -223,6 +234,11 @@ class RTEngine {
 
   OptixTraversableHandle buildAccel(
       cudaStream_t cuda_stream, ArrayView<OptixAabb> aabbs,
+      thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
+
+  OptixTraversableHandle buildAccelTriangle(
+      cudaStream_t cuda_stream, ArrayView<float3> vertices,
+      ArrayView<uint3> indices,
       thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
 
   OptixTraversableHandle buildInstanceAccel(

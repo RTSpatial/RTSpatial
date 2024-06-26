@@ -6,6 +6,7 @@ set(OPTIX_PROGRAM_TARGET "--ptx")
 set(ENABLED_ARCHS "80")
 
 set(SHADERS
+        "${PROJECT_SOURCE_DIR}/src/shaders/shaders_contains_point_query_2d_triangle.cu"
         "${PROJECT_SOURCE_DIR}/src/shaders/shaders_contains_point_query_2d.cu"
         "${PROJECT_SOURCE_DIR}/src/shaders/shaders_contains_envelope_query_2d.cu"
         "${PROJECT_SOURCE_DIR}/src/shaders/shaders_intersects_envelope_query_2d.cu"
@@ -103,7 +104,7 @@ include_directories("${PROJECT_SOURCE_DIR}/include")
 ###############################################################################
 # Tests
 find_package(Boost REQUIRED)
-add_executable(rtspatial_tests tests/rtspatial_tests.cu rt_engine.cu)
+add_executable(rtspatial_tests tests/rtspatial_tests.cu rt_engine.cu ${ALL_PROGRAM_MODULES})
 
 target_link_libraries(rtspatial_tests
         ${GTEST_LIBRARIES}

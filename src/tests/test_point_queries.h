@@ -6,6 +6,35 @@
 #include "test_commons.h"
 namespace rtspatial {
 
+TEST(PointQueries, fp32_contains_point_triangle) {
+  SpatialIndex<float, 2, true> index;
+  pinned_vector<envelope_f2d_t> envelopes;
+  pinned_vector<point_f2d_t> points;
+  Queue<thrust::pair<size_t, size_t>> result;
+
+  envelopes.push_back(envelope_f2d_t(point_f2d_t(0, 0), point_f2d_t(1, 1)));
+
+  envelopes.push_back(
+      envelope_f2d_t(point_f2d_t(0.2, 0.2), point_f2d_t(0.8, 0.8)));
+
+  points.push_back(point_f2d_t(0.1, 0.1));  // 0
+  points.push_back(point_f2d_t(0.5, 0.5));  // 0, 1
+  points.push_back(point_f2d_t(0.5, 0.6));  // 0, 1
+
+  points.push_back(point_f2d_t(1.0, 1.1));  //
+  points.push_back(point_f2d_t(2.0, 2.0));  //
+
+  result.Init(1000);
+  Stream stream;
+
+  index.Init(exec_root);
+  index.Load(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
+  index.ContainsWhatQuery(ArrayView<point_f2d_t>(points), result,
+                          stream.cuda_stream());
+  uint32_t n_res = result.size(stream.cuda_stream());
+  ASSERT_EQ(n_res, 5);
+}
+
 TEST(PointQueries, fp32_contains_point) {
   spatial_index_f2d_t index;
   pinned_vector<envelope_f2d_t> envelopes;
@@ -17,12 +46,12 @@ TEST(PointQueries, fp32_contains_point) {
   envelopes.push_back(
       envelope_f2d_t(point_f2d_t(0.2, 0.2), point_f2d_t(0.8, 0.8)));
 
-  points.push_back(point_f2d_t(0.1, 0.1));  // 1
-  points.push_back(point_f2d_t(0.5, 0.5));  // 2
-  points.push_back(point_f2d_t(0.5, 0.6));  // 2
+  points.push_back(point_f2d_t(0.1, 0.1));  // 0
+  points.push_back(point_f2d_t(0.5, 0.5));  // 0, 1
+  points.push_back(point_f2d_t(0.5, 0.6));  // 0, 1
 
-  points.push_back(point_f2d_t(1.0, 1.1));  // 0
-  points.push_back(point_f2d_t(2.0, 2.0));  // 0
+  points.push_back(point_f2d_t(1.0, 1.1));  //
+  points.push_back(point_f2d_t(2.0, 2.0));  //
 
   result.Init(1000);
   Stream stream;
