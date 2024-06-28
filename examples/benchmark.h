@@ -10,11 +10,16 @@
 #include <boost/geometry/geometries/register/point.hpp>
 #include <boost/geometry/index/rtree.hpp>
 #include <boost/iterator/function_output_iterator.hpp>
+#include <fstream>
+#include <mutex>
+#include <thread>
 
 #include "flags.h"
 #include "rtspatial/geom/envelope.cuh"
 #include "rtspatial/geom/point.cuh"
+#include "rtspatial/spatial_index.cuh"
 #include "rtspatial/utils/stopwatch.h"
+#include "rtspatial/utils/stream.h"
 
 struct rtree_point_t {
   uint32_t id;
@@ -44,21 +49,42 @@ std::vector<Envelope<Point<COORD_T, 2>>> LoadBoxes(
     const std::string& path, int limit = std::numeric_limits<int>::max()) {
   std::ifstream ifs(path);
   std::string line;
-  using point_type = boost::geometry::model::d2::point_xy<double>;
+  using point_type = boost::geometry::model::d2::point_xy<COORD_T>;
+  using polygon_type = boost::geometry::model::polygon<point_type>;
   using region_t = Envelope<Point<COORD_T, 2>>;
   std::vector<region_t> regions;
 
   while (std::getline(ifs, line)) {
     if (!line.empty()) {
-      boost::geometry::model::polygon<point_type> c;
-      boost::geometry::read_wkt(line, c);
-      assert(c.outer().size() == 5);
-      double lows[2] = {std::numeric_limits<double>::max(),
-                        std::numeric_limits<double>::max()};
-      double highs[2] = {std::numeric_limits<double>::lowest(),
-                         std::numeric_limits<double>::lowest()};
+      std::vector<point_type> points;
 
-      for (auto& p : c.outer()) {
+      if (line.rfind("MULTIPOLYGON", 0) == 0) {
+        boost::geometry::model::multi_polygon<polygon_type> c;
+        boost::geometry::read_wkt(line, c);
+
+        for (auto& poly : c) {
+          for (auto& p : poly.outer()) {
+            points.push_back(p);
+          }
+        }
+      } else if (line.rfind("POLYGON", 0) == 0) {
+        boost::geometry::model::polygon<point_type> c;
+        boost::geometry::read_wkt(line, c);
+
+        for (auto& p : c.outer()) {
+          points.push_back(p);
+        }
+      } else {
+        std::cerr << "Bad Geometry " << line << "\n";
+        abort();
+      }
+
+      COORD_T lows[2] = {std::numeric_limits<COORD_T>::max(),
+                         std::numeric_limits<COORD_T>::max()};
+      COORD_T highs[2] = {std::numeric_limits<COORD_T>::lowest(),
+                          std::numeric_limits<COORD_T>::lowest()};
+
+      for (auto& p : points) {
         lows[0] = std::min(lows[0], p.x());
         highs[0] = std::max(highs[0], p.x());
         lows[1] = std::min(lows[1], p.y());
@@ -75,6 +101,46 @@ std::vector<Envelope<Point<COORD_T, 2>>> LoadBoxes(
   }
   ifs.close();
   return regions;
+}
+
+template <typename COORD_T>
+std::vector<Point<COORD_T, 2>> LoadPoints(
+    const std::string& path, int limit = std::numeric_limits<int>::max()) {
+  std::ifstream ifs(path);
+  std::string line;
+  using point_type = boost::geometry::model::d2::point_xy<COORD_T>;
+  using polygon_type = boost::geometry::model::polygon<point_type>;
+  std::vector<Point<COORD_T, 2>> points;
+
+  while (std::getline(ifs, line)) {
+    if (!line.empty()) {
+      if (line.rfind("MULTIPOLYGON", 0) == 0) {
+        boost::geometry::model::multi_polygon<polygon_type> c;
+        boost::geometry::read_wkt(line, c);
+
+        for (auto& poly : c) {
+          for (auto& p : poly.outer()) {
+            points.push_back(Point<COORD_T, 2>(p.x(), p.y()));
+          }
+        }
+      } else if (line.rfind("POLYGON", 0) == 0) {
+        boost::geometry::model::polygon<point_type> c;
+        boost::geometry::read_wkt(line, c);
+
+        for (auto& p : c.outer()) {
+          points.push_back(Point<COORD_T, 2>(p.x(), p.y()));
+        }
+      } else {
+        std::cerr << "Bad Geometry " << line << "\n";
+        abort();
+      }
+      if (points.size() >= limit) {
+        break;
+      }
+    }
+  }
+  ifs.close();
+  return points;
 }
 
 void DumpIntersects(std::vector<thrust::pair<size_t, size_t>>& intersects,
@@ -322,14 +388,14 @@ void RunIntersectsEnvelopeQuery(const std::string& exec_root) {
   }
   //  DumpIntersects(rtree_intersects, "/tmp/rtree_xsects");
   {
-//    envelopes.clear();
-//    queries.clear();
+    //    envelopes.clear();
+    //    queries.clear();
 
-//    Envelope<point_f2d_t> e(point_f2d_t(0, 0), point_f2d_t(1, 1));
-//    Envelope<point_f2d_t> q(point_f2d_t(0.5, 0.5), point_f2d_t(0.8, 0.8));
-//
-//    envelopes.push_back(e);
-//    queries.push_back(q);
+    //    Envelope<point_f2d_t> e(point_f2d_t(0, 0), point_f2d_t(1, 1));
+    //    Envelope<point_f2d_t> q(point_f2d_t(0.5, 0.5), point_f2d_t(0.8, 0.8));
+    //
+    //    envelopes.push_back(e);
+    //    queries.push_back(q);
 
     auto rtspatial_intersects =
         RunRTSpatialIntersectsEnvelopeQuery(exec_root, envelopes, queries);

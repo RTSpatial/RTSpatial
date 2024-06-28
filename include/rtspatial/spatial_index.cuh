@@ -16,12 +16,12 @@
 namespace rtspatial {
 namespace details {
 template <typename COORD_T, int N_DIMS>
-void FillAABBs(cudaStream_t cuda_stream,
+inline void FillAABBs(cudaStream_t cuda_stream,
                ArrayView<Envelope<Point<COORD_T, N_DIMS>>> envelopes,
                device_uvector<OptixAabb>& aabbs) {}
 
 template <>
-void FillAABBs<float, 2>(cudaStream_t cuda_stream,
+inline void FillAABBs<float, 2>(cudaStream_t cuda_stream,
                          ArrayView<Envelope<Point<float, 2>>> envelopes,
                          device_uvector<OptixAabb>& aabbs) {
   aabbs.resize(envelopes.size());
@@ -41,7 +41,7 @@ void FillAABBs<float, 2>(cudaStream_t cuda_stream,
 }
 
 template <>
-void FillAABBs<double, 2>(cudaStream_t cuda_stream,
+inline void FillAABBs<double, 2>(cudaStream_t cuda_stream,
                           ArrayView<Envelope<Point<double, 2>>> envelopes,
                           device_uvector<OptixAabb>& aabbs) {
   aabbs.resize(envelopes.size());
@@ -61,13 +61,13 @@ void FillAABBs<double, 2>(cudaStream_t cuda_stream,
 }
 
 template <typename COORD_T, int N_DIMS>
-void FillTriangles(cudaStream_t cuda_stream,
+inline void FillTriangles(cudaStream_t cuda_stream,
                    ArrayView<Envelope<Point<COORD_T, N_DIMS>>> envelopes,
                    device_uvector<float3>& vertices,
                    device_uvector<uint3>& indices) {}
 
 template <>
-void FillTriangles<float, 2>(cudaStream_t cuda_stream,
+inline void FillTriangles<float, 2>(cudaStream_t cuda_stream,
                              ArrayView<Envelope<Point<float, 2>>> envelopes,
                              device_uvector<float3>& vertices,
                              device_uvector<uint3>& indices) {
@@ -99,7 +99,7 @@ void FillTriangles<float, 2>(cudaStream_t cuda_stream,
 }
 
 template <typename COORD_T, int N_DIMS>
-void FillRayParams(cudaStream_t cuda_stream,
+inline void FillRayParams(cudaStream_t cuda_stream,
                    const ArrayView<Envelope<Point<COORD_T, N_DIMS>>>& envelopes,
                    device_uvector<RayParams<COORD_T, N_DIMS>>& ray_params,
                    bool inverse = false) {

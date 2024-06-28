@@ -15,7 +15,21 @@
 # ======================================================================== #
 
 cmake_minimum_required(VERSION 3.27)
-project(RTSpatial LANGUAGES CUDA C CXX VERSION 1.0.1)
+project(RTSpatial LANGUAGES CUDA C CXX)
+
+set(RTSPATIAL_VERSION_MAJOR 1 CACHE STRING "major version" FORCE)
+set(RTSPATIAL_VERSION_MINOR 0 CACHE STRING "minor version" FORCE)
+set(RTSPATIAL_VERSION ${RTSPATIAL_VERSION_MAJOR}.${RTSPATIAL_VERSION_MINOR} CACHE STRING "version" FORCE)
+
+
+set(RTSPATIAL_VERSION_MAJOR "1")
+set(RTSPATIAL_VERSION_MINOR "0")
+set(RTSPATIAL_VERSION_STRING
+        "${RTSPATIAL_VERSION_MAJOR}.${RTSPATIAL_VERSION_MINOR}")
+set(RTSPATIAL_LIB_VERSION "1.0")
+
+set(ENABLED_ARCHS "80")
+
 
 if (NOT WIN32)
     # visual studio doesn't like these (not need them):
@@ -68,21 +82,12 @@ find_package(CUDAToolkit REQUIRED)
 include(cmake/configure_build_type.cmake)
 include(cmake/FindOptiX.cmake)
 include(cmake/nvcuda_compile_module.cmake)
-#include(cmake/FindHdrHistogram.cmake)
 #if (NOT HdrHistogram_FOUND)
 #    message(FATAL_ERROR "HdrHistogram not found, need to build and install from https://github.com/HdrHistogram/HdrHistogram_c")
 #endif ()
-find_package(GTest REQUIRED)
-include_directories(${GTEST_INCLUDE_DIRS})
 
 include_directories(${PROJECT_SOURCE_DIR})
 
-include("cmake/FindGFlags.cmake")
-if (NOT GFLAGS_FOUND)
-    message(STATUS "gflags not found, build without gflags")
-else ()
-    include_directories(SYSTEM ${GFLAGS_INCLUDE_DIRS})
-endif ()
 
 #include("cmake/FindGlog.cmake")
 #if (NOT GLOG_FOUND)
@@ -98,4 +103,5 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 # ------------------------------------------------------------------
 
 add_subdirectory(src)
-#add_subdirectory(test)
+add_subdirectory(examples)
+add_subdirectory(test)
