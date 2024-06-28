@@ -69,7 +69,7 @@ include_directories("${PROJECT_SOURCE_DIR}/include")
 
 ###############################################################################
 # Library
-add_library(rtspatial ${RTPSATIAL_CU})
+add_library(rtspatial ${RTPSATIAL_CU} ${ALL_PROGRAM_MODULES})
 target_link_libraries(rtspatial
         ${CUDA_LIBRARIES}
         ${CUDA_CUDA_LIBRARY}
