@@ -45,5 +45,23 @@ std::vector<Envelope<Point<COORD_T, 2>>> GenerateUniformBoxes(
   }
   return envelopes;
 }
+
+template <typename COORD_T>
+std::vector<Point<COORD_T, 2>> GenerateUniformPoints(size_t n) {
+  std::mt19937 mt(n);
+  std::uniform_real_distribution<COORD_T> gen_x(0.0, 1.0);
+  std::uniform_real_distribution<COORD_T> gen_y(0.0, 1.0);
+  std::vector<Point<COORD_T, 2>> points;
+
+  points.resize(n);
+
+  for (size_t i = 0; i < n; i++) {
+    auto x = gen_x(mt);
+    auto y = gen_y(mt);
+
+    points[i] = Point<COORD_T, 2>(x, y);
+  }
+  return points;
+}
 }  // namespace rtspatial
 #endif  // RTSPATIAL_TEST_COMMONS_H
