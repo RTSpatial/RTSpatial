@@ -5,6 +5,8 @@
 
 #include "flags.h"
 DECLARE_string(box);
-DECLARE_string(query);
+DECLARE_string(point_query);
+DECLARE_string(box_query);
+DECLARE_string(predicate);
 
 #endif  // RTSPATIAL_FLAGS_H

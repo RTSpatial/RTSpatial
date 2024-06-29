@@ -10,14 +10,6 @@ include_directories("${PROJECT_SOURCE_DIR}/examples")
 
 ###############################################################################
 # Experiments
-add_executable(expr expr.cu flags.cpp)
-
-target_link_libraries(expr rtspatial ${GFLAGS_LIBRARIES})
-target_compile_options(expr PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda --expt-relaxed-constexpr --use_fast_math>)
-set_target_properties(expr PROPERTIES CUDA_ARCHITECTURES "${ENABLED_ARCHS}" CUDA_SEPARABLE_COMPILATION ON)
-
-###############################################################################
-# Demos
 add_executable(rtspatial_exec spatial_index.cu flags.cpp)
 
 target_link_libraries(rtspatial_exec rtspatial ${GFLAGS_LIBRARIES})

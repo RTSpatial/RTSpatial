@@ -1,5 +1,6 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include <limits.h>
 #include <optix.h>
 #include <optix_device.h>
 
@@ -20,9 +21,61 @@ extern "C" __global__ void __anyhit__contains_point_query_2d_triangle() {
   const auto& min_corner = envelope.get_min();
   const auto& max_corner = envelope.get_max();
 
-  if (envelope.Contains(query)) {
-    params.result.Append(thrust::make_pair(envelope_id, query_id));
+#ifndef NDEBUG
+  OptixTraversableHandle gas = optixGetGASTraversableHandle();
+  int mid_tri = triangle_id / 2;
+  unsigned int primIdx1 = mid_tri * 2;
+  unsigned int primIdx2 = primIdx1 + 1;
+  unsigned int sbtIdx = optixGetSbtGASIndex();
+  float time = optixGetRayTime();
+  float3 data1[3], data2[3];
+
+  optixGetTriangleVertexData(gas, primIdx1, sbtIdx, time, data1);
+  optixGetTriangleVertexData(gas, primIdx2, sbtIdx, time, data2);
+
+  float2 min_tri, max_tri;
+
+  min_tri.x = std::numeric_limits<FLOAT_TYPE>::max();
+  min_tri.y = std::numeric_limits<FLOAT_TYPE>::max();
+  max_tri.x = std::numeric_limits<FLOAT_TYPE>::min();
+  max_tri.y = std::numeric_limits<FLOAT_TYPE>::min();
+
+  for (int i = 0; i < 3; i++) {
+    min_tri.x = std::min(min_tri.x, data1[i].x);
+    min_tri.y = std::min(min_tri.y, data1[i].y);
+    max_tri.x = std::max(max_tri.x, data1[i].x);
+    max_tri.y = std::max(max_tri.y, data1[i].y);
   }
+
+  for (int i = 0; i < 3; i++) {
+    min_tri.x = std::min(min_tri.x, data2[i].x);
+    min_tri.y = std::min(min_tri.y, data2[i].y);
+    max_tri.x = std::max(max_tri.x, data2[i].x);
+    max_tri.y = std::max(max_tri.y, data2[i].y);
+  }
+
+  assert(min_tri.x == min_corner.get_x());
+  assert(max_tri.x == max_corner.get_x());
+  assert(min_tri.y == min_corner.get_y());
+  assert(max_tri.y == max_corner.get_y());
+
+//  printf("tri x [%f, %f] - y [%f, %f] , box: x [%f, %f] - y [%f, %f]\n",
+//         min_tri.x, max_tri.x, min_tri.y, max_tri.y, min_corner.get_x(),
+//         max_corner.get_x(), min_corner.get_y(), max_corner.get_y());
+
+  //  printf("tri1 (%f, %f), (%f, %f), (%f, %f); tri2 (%f, %f), (%f, %f), (%f,
+  //  %f), box: x [%f, %f] - y [%f, %f]\n",
+  //         data1[0].x, data1[0].y, data1[1].x, data1[1].y, data1[2].x,
+  //         data1[2].y, data2[0].x, data2[0].y, data2[1].x, data2[1].y,
+  //         data2[2].x, data2[2].y, min_corner.get_x(), max_corner.get_x(),
+  //         min_corner.get_y(), max_corner.get_y()
+  //         );
+
+#endif
+
+//  if (envelope.Contains(query)) {
+    params.result.Append(thrust::make_pair(envelope_id, query_id));
+//  }
   optixIgnoreIntersection();
 }
 
@@ -40,8 +93,6 @@ extern "C" __global__ void __raygen__contains_point_query_2d_triangle() {
     origin.z = -0.1;
 
     float3 dir = {0, 0, 1};
-    dir.x = p.get_x();
-    dir.y = p.get_y();
 
     optixTrace(params.handle, origin, dir, tmin, tmax, 0,
                OptixVisibilityMask(255),

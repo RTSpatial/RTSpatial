@@ -130,6 +130,11 @@ std::vector<Point<COORD_T, 2>> LoadPoints(
         for (auto& p : c.outer()) {
           points.push_back(Point<COORD_T, 2>(p.x(), p.y()));
         }
+      } else if (line.rfind("POINT", 0) == 0) {
+        point_type c;
+        boost::geometry::read_wkt(line, c);
+
+        points.push_back(Point<COORD_T, 2>(c.x(), c.y()));
       } else {
         std::cerr << "Bad Geometry " << line << "\n";
         abort();
@@ -214,6 +219,54 @@ std::vector<thrust::pair<size_t, size_t>> RunRTreeIntersectsEnvelopeQuery(
     q.max.x = queries[i].get_max().get_x();
     q.max.y = queries[i].get_max().get_y();
     rtree.query(boost::geometry::index::intersects(q),
+                boost::make_function_output_iterator([&](const rtree_box_t& b) {
+                  xsects.emplace_back(thrust::make_pair(b.id, i));
+                }));
+  }
+  sw.stop();
+
+  double t_query = sw.ms();
+  std::cout << "Rtree, load " << t_load << " ms, query " << t_query << " ms"
+            << std::endl;
+  return xsects;
+}
+
+
+template <typename COORD_T>
+std::vector<thrust::pair<size_t, size_t>> RunRTreeContainsPointQuery(
+    const std::vector<Envelope<Point<COORD_T, 2>>>& envelopes,
+    const std::vector<Point<COORD_T, 2>>& queries) {
+  std::vector<rtree_box_t> vec_boxes;
+  std::vector<thrust::pair<size_t, size_t>> xsects;
+
+  vec_boxes.resize(envelopes.size());
+
+  for (size_t i = 0; i < envelopes.size(); i++) {
+    vec_boxes[i].id = i;
+    vec_boxes[i].min.x = envelopes[i].get_min().get_x();
+    vec_boxes[i].min.y = envelopes[i].get_min().get_y();
+    vec_boxes[i].max.x = envelopes[i].get_max().get_x();
+    vec_boxes[i].max.y = envelopes[i].get_max().get_y();
+  }
+  Stopwatch sw;
+
+  sw.start();
+  boost::geometry::index::rtree<rtree_box_t, boost::geometry::index::rstar<16>,
+                                boost::geometry::index::indexable<rtree_box_t>>
+      rtree(vec_boxes);
+  sw.stop();
+  double t_load = sw.ms();
+
+  sw.start();
+
+  for (size_t i = 0; i < queries.size(); i++) {
+    rtree_point_t q;
+
+    q.id = i;
+    q.x = queries[i].get_x();
+    q.y = queries[i].get_y();
+
+    rtree.query(boost::geometry::index::contains(q),
                 boost::make_function_output_iterator([&](const rtree_box_t& b) {
                   xsects.emplace_back(thrust::make_pair(b.id, i));
                 }));
@@ -358,7 +411,8 @@ void RunIntersectsEnvelopeQuery(const std::string& exec_root) {
   using point_f2d_t = Point<float, 2>;
 
   std::vector<Envelope<point_f2d_t>> envelopes = LoadBoxes<float>(FLAGS_box);
-  std::vector<Envelope<point_f2d_t>> queries = LoadBoxes<float>(FLAGS_query);
+  std::vector<Envelope<point_f2d_t>> queries =
+      LoadBoxes<float>(FLAGS_box_query);
 
   std::cout << "envelopes " << envelopes.size() << std::endl;
   std::cout << "queries " << queries.size() << std::endl;
@@ -412,6 +466,39 @@ void RunIntersectsEnvelopeQuery(const std::string& exec_root) {
   //    assert(envelope.Intersects(query));
   //    assert(query.Intersects(envelope));
   //  }
+}
+
+template <typename COORD_T>
+void BoxContainsPointQueries(
+    const std::string& exec_root,
+    const std::vector<Envelope<Point<COORD_T, 2>>>& boxes,
+    const std::vector<Point<COORD_T, 2>>& point_queries) {
+  SpatialIndex<COORD_T, 2, true> index;
+  Queue<thrust::pair<size_t, size_t>> results;
+  thrust::device_vector<Envelope<Point<COORD_T, 2>>> d_boxes(boxes);
+  thrust::device_vector<Point<COORD_T, 2>> d_point_queries(point_queries);
+  Stream stream;
+  Stopwatch sw;
+
+  index.Init(exec_root);
+  results.Init(std::max(
+      1000u, (uint32_t) (d_boxes.size() * d_point_queries.size() * 0.01)));
+
+  sw.start();
+  index.Load(d_boxes, stream.cuda_stream());
+  stream.Sync();
+  sw.stop();
+  double t_load = sw.ms();
+
+  sw.start();
+  index.ContainsWhatQuery(ArrayView<Point<COORD_T, 2>>(d_point_queries),
+                          results, stream.cuda_stream());
+  size_t n_results = results.size(stream.cuda_stream());
+  sw.stop();
+  double t_query = sw.ms();
+
+  std::cout << "RT, load " << t_load << " ms, query " << t_query
+            << " ms, results: " << n_results << std::endl;
 }
 
 }  // namespace rtspatial
