@@ -372,7 +372,7 @@ pinned_vector<thrust::pair<size_t, size_t>> RunRTSpatialIntersectsEnvelopeQuery(
       std::max(1000u, (uint32_t) (envelopes.size() * queries.size() * 0.01)));
 
   sw.start();
-  index.Load(d_envelopes, stream.cuda_stream());
+  index.Insert(d_envelopes, stream.cuda_stream());
   stream.Sync();
   sw.stop();
 
@@ -485,7 +485,7 @@ void BoxContainsPointQueries(
       1000u, (uint32_t) (d_boxes.size() * d_point_queries.size() * 0.01)));
 
   sw.start();
-  index.Load(d_boxes, stream.cuda_stream());
+  index.Insert(d_boxes, stream.cuda_stream());
   stream.Sync();
   sw.stop();
   double t_load = sw.ms();

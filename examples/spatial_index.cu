@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
   index.Init(exec_root);
 
   sw.start();
-  index.Load(d_boxes, stream.cuda_stream());
+  index.Insert(d_boxes, stream.cuda_stream());
   stream.Sync();
   sw.stop();
   double t_load = sw.ms(), t_query;

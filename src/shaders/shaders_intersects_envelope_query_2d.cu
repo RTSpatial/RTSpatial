@@ -12,33 +12,25 @@ extern "C" __constant__
         params;
 
 extern "C" __global__ void __intersection__intersects_envelope_query_2d() {
-  auto envelope_id = optixGetPrimitiveIndex();
+  auto primitive_idx = optixGetPrimitiveIndex();
+  size_t envelope_id;
   auto query_id = optixGetPayload_0();
   //  const auto& envelope = params.envelopes[envelope_id];
   //  const auto& query = params.queries[query_id];
   // This filter is not necessary anymore
   //      if (envelope.Intersects(query)) ...
+
+  if (params.inverse) {
+    envelope_id = primitive_idx;
+  } else {
+    auto inst_id = optixGetInstanceId();
+    envelope_id = params.prefix_sum[inst_id] + primitive_idx;
+  }
+
   const auto& aabb = params.aabbs[envelope_id];
   bool query_hit = params.ray_params_queries[query_id].HitAABB(aabb);
 
   if (query_hit) {
-    //
-    //    printf("xsect %d %u %u, envelope x [%.4f, %.4f] y [%.4f, %.4f],
-    //    query
-    //    x
-    //    [%.4f, %.4f] y [%.4f, %.4f]\n",
-    //           x,
-    //           envelope_id, query_id,
-    //           envelope.get_min().get_x(),
-    //           envelope.get_max().get_x(),
-    //           envelope.get_min().get_y(),
-    //           envelope.get_max().get_y(),
-    //           query.get_min().get_x(),
-    //           query.get_max().get_x(),
-    //           query.get_min().get_y(),
-    //           query.get_max().get_y()
-    //    );
-
     if (params.inverse) {
       const auto& aabb_query = params.aabbs_queries[query_id];
       bool box_hit = params.ray_params[envelope_id].HitAABB(aabb_query);

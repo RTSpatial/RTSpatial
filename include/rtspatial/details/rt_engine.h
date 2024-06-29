@@ -37,8 +37,8 @@ enum ModuleIdentifier {
   MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D,
   NUM_MODULE_IDENTIFIERS
 };
-static const float IDENTICAL_TRANSFORMATION_MTX[12] = {1.0, 0, 0, 0, 0,   1.0,
-                                                       0,   0, 0, 0, 1.0, 0};
+static const float IDENTICAL_TRANSFORMATION_MTX[12] = {
+    1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
 
 class Module {
  public:
@@ -111,13 +111,14 @@ struct RTConfig {
       : max_reg_count(0),
         max_traversable_depth(2),  // IAS+GAS
         max_trace_depth(2),
+        logCallbackLevel(1),
         opt_level(OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         dbg_level(OPTIX_COMPILE_DEBUG_LEVEL_NONE),
         temp_buf_size(100 * 1024 * 1024) {}
 
   void AddModule(const Module& mod) {
     if (access(mod.get_program_name().c_str(), R_OK) != 0) {
-      std::cerr << "Cannot open " << mod.get_program_name() << std::endl;
+      std::cerr << "Error: cannot open " << mod.get_program_name() << std::endl;
       abort();
     }
 
@@ -127,6 +128,7 @@ struct RTConfig {
   int max_reg_count;
   int max_traversable_depth;
   int max_trace_depth;
+  int logCallbackLevel;
   OptixCompileOptimizationLevel opt_level;
   OptixCompileDebugLevel dbg_level;
   std::map<ModuleIdentifier, Module> modules;
@@ -185,8 +187,9 @@ class RTEngine {
       memcpy(tmp_h_instances_[i].transform, IDENTICAL_TRANSFORMATION_MTX,
              sizeof(float) * 12);
       tmp_h_instances_[i].traversableHandle = handles[i];
-      tmp_h_instances_[i].sbtOffset = i;
+      tmp_h_instances_[i].sbtOffset = 0;
       tmp_h_instances_[i].visibilityMask = 255;
+      tmp_h_instances_[i].flags = OPTIX_INSTANCE_FLAG_NONE;
     }
     tmp_instances_ = tmp_h_instances_;
     return buildInstanceAccel(cuda_stream,

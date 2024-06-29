@@ -17,16 +17,23 @@ namespace rtspatial {
 namespace details {
 template <typename COORD_T, int N_DIMS>
 inline void FillAABBs(cudaStream_t cuda_stream,
-               ArrayView<Envelope<Point<COORD_T, N_DIMS>>> envelopes,
-               device_uvector<OptixAabb>& aabbs) {}
+                      ArrayView<Envelope<Point<COORD_T, N_DIMS>>> envelopes,
+                      device_uvector<OptixAabb>& aabbs, bool append) {}
 
 template <>
 inline void FillAABBs<float, 2>(cudaStream_t cuda_stream,
-                         ArrayView<Envelope<Point<float, 2>>> envelopes,
-                         device_uvector<OptixAabb>& aabbs) {
-  aabbs.resize(envelopes.size());
+                                ArrayView<Envelope<Point<float, 2>>> envelopes,
+                                device_uvector<OptixAabb>& aabbs, bool append) {
+  size_t prev_size = aabbs.size();
+
+  if (append) {
+    aabbs.resize(aabbs.size() + envelopes.size());
+  } else {
+    aabbs.resize(envelopes.size());
+  }
+
   thrust::transform(thrust::cuda::par.on(cuda_stream), envelopes.begin(),
-                    envelopes.end(), aabbs.begin(),
+                    envelopes.end(), aabbs.begin() + prev_size,
                     [] __device__(const Envelope<Point<float, 2>>& envelope) {
                       OptixAabb aabb;
                       const auto& min_point = envelope.get_min();
@@ -41,13 +48,21 @@ inline void FillAABBs<float, 2>(cudaStream_t cuda_stream,
 }
 
 template <>
-inline void FillAABBs<double, 2>(cudaStream_t cuda_stream,
-                          ArrayView<Envelope<Point<double, 2>>> envelopes,
-                          device_uvector<OptixAabb>& aabbs) {
-  aabbs.resize(envelopes.size());
+inline void FillAABBs<double, 2>(
+    cudaStream_t cuda_stream, ArrayView<Envelope<Point<double, 2>>> envelopes,
+    device_uvector<OptixAabb>& aabbs, bool append) {
+  size_t prev_size = aabbs.size();
+
+  if (append) {
+    aabbs.resize(aabbs.size() + envelopes.size());
+  } else {
+    aabbs.resize(envelopes.size());
+  }
+
   thrust::transform(
       thrust::cuda::par.on(cuda_stream), envelopes.begin(), envelopes.end(),
-      aabbs.begin(), [] __device__(const Envelope<Point<double, 2>>& envelope) {
+      aabbs.begin() + prev_size,
+      [] __device__(const Envelope<Point<double, 2>>& envelope) {
         OptixAabb aabb;
         const auto& min_point = envelope.get_min();
         const auto& max_point = envelope.get_max();
@@ -61,21 +76,25 @@ inline void FillAABBs<double, 2>(cudaStream_t cuda_stream,
 }
 
 template <typename COORD_T, int N_DIMS>
-inline void FillTriangles(cudaStream_t cuda_stream,
-                   ArrayView<Envelope<Point<COORD_T, N_DIMS>>> envelopes,
-                   device_uvector<float3>& vertices,
-                   device_uvector<uint3>& indices) {}
+inline void AppendTriangles(
+    cudaStream_t cuda_stream,
+    ArrayView<Envelope<Point<COORD_T, N_DIMS>>> envelopes,
+    device_uvector<float3>& vertices, device_uvector<uint3>& indices) {}
 
 template <>
-inline void FillTriangles<float, 2>(cudaStream_t cuda_stream,
-                             ArrayView<Envelope<Point<float, 2>>> envelopes,
-                             device_uvector<float3>& vertices,
-                             device_uvector<uint3>& indices) {
-  vertices.resize(envelopes.size() * 4);
-  indices.resize(envelopes.size() * 2);
+inline void AppendTriangles<float, 2>(
+    cudaStream_t cuda_stream, ArrayView<Envelope<Point<float, 2>>> envelopes,
+    device_uvector<float3>& vertices, device_uvector<uint3>& indices) {
+  size_t prev_vertices_size = vertices.size();
+  size_t prev_indices_size = indices.size();
 
-  float3* d_vertices = thrust::raw_pointer_cast(vertices.data());
-  uint3* d_indices = thrust::raw_pointer_cast(indices.data());
+  vertices.resize(vertices.size() + envelopes.size() * 4);
+  indices.resize(indices.size() + envelopes.size() * 2);
+
+  float3* d_vertices =
+      thrust::raw_pointer_cast(vertices.data() + prev_vertices_size);
+  uint3* d_indices =
+      thrust::raw_pointer_cast(indices.data() + prev_indices_size);
 
   thrust::for_each(
       thrust::cuda::par.on(cuda_stream),
@@ -97,24 +116,6 @@ inline void FillTriangles<float, 2>(cudaStream_t cuda_stream,
         d_indices[i * 2 + 1] = uint3{i * 4 + 2, i * 4 + 1, i * 4 + 3};
       });
 }
-
-template <typename COORD_T, int N_DIMS>
-inline void FillRayParams(cudaStream_t cuda_stream,
-                   const ArrayView<Envelope<Point<COORD_T, N_DIMS>>>& envelopes,
-                   device_uvector<RayParams<COORD_T, N_DIMS>>& ray_params,
-                   bool inverse = false) {
-  ray_params.resize(envelopes.size());
-
-  thrust::transform(
-      thrust::cuda::par.on(cuda_stream), envelopes.begin(), envelopes.end(),
-      ray_params.begin(),
-      [inverse] __device__(const Envelope<Point<COORD_T, N_DIMS>>& envelope) {
-        RayParams<COORD_T, N_DIMS> params;
-        params.Compute(envelope, inverse);
-        return params;
-      });
-}
-
 }  // namespace details
 
 // Ref: https://arc2r.github.io/book/Spatial_Predicates.html
@@ -133,6 +134,7 @@ class SpatialIndex {
     details::RTConfig config = details::get_default_rt_config(exec_root);
 
     rt_engine_.Init(config);
+    Clear();
   }
 
   void Reserve(size_t capacity) {
@@ -140,46 +142,93 @@ class SpatialIndex {
     aabbs_.reserve(capacity);
   }
 
-  void Load(ArrayView<envelope_t> envelopes,
-            cudaStream_t cuda_stream = nullptr) {
+  void Clear() {
+    envelopes_.clear();
+    aabbs_.clear();
+    vertices_.clear();
+    indices_.clear();
+    ray_params_.clear();
+    as_buf_.clear();
+    gas_handles_.clear();
+    gas_handles_tri_.clear();
+    aabbs_queries_.clear();
+    gas_buf_queries_.clear();
+    ray_params_queries_.clear();
+    h_prefix_sum_.clear();
+    h_prefix_sum_.push_back(0);
+  }
+
+  void Insert(ArrayView<envelope_t> envelopes,
+              cudaStream_t cuda_stream = nullptr) {
     if (envelopes.empty()) {
       return;
     }
-    envelopes_.resize(envelopes.size());
-    details::FillRayParams(cuda_stream, envelopes, ray_params_);
+    size_t curr_geom_size = envelopes.size();
+    size_t prev_geom_size = envelopes_.size();
+
+    envelopes_.resize(envelopes_.size() + curr_geom_size);
+    ray_params_.resize(ray_params_.size() + curr_geom_size);
+
     thrust::copy(thrust::cuda::par.on(cuda_stream), envelopes.begin(),
-                 envelopes.end(), envelopes_.begin());
+                 envelopes.end(), envelopes_.begin() + prev_geom_size);
+
+    thrust::transform(
+        thrust::cuda::par.on(cuda_stream), envelopes.begin(), envelopes.end(),
+        ray_params_.begin() + prev_geom_size,
+        [] __device__(const Envelope<Point<COORD_T, N_DIMS>>& envelope) {
+          details::RayParams<COORD_T, N_DIMS> params;
+          params.Compute(envelope, false /* inverse */);
+          return params;
+        });
 
     OptixTraversableHandle handle;
     thrust::device_vector<unsigned char> buf;
 
-    as_buf_.clear();
-
     if (USE_TRIANGLE) {
-      details::FillTriangles(cuda_stream, envelopes, vertices_, indices_);
+      size_t prev_vertices_size = vertices_.size();
+      size_t prev_indices_size = indices_.size();
+      details::AppendTriangles(cuda_stream, envelopes, vertices_, indices_);
 
-      handle = rt_engine_.BuildAccelTriangle(cuda_stream,
-                                             ArrayView<float3>(vertices_),
-                                             ArrayView<uint3>(indices_), buf);
+      handle = rt_engine_.BuildAccelTriangle(
+          cuda_stream,
+          ArrayView<float3>(
+              thrust::raw_pointer_cast(vertices_.data()) + prev_vertices_size,
+              vertices_.size() - prev_vertices_size),
+          ArrayView<uint3>(
+              thrust::raw_pointer_cast(indices_.data()) + prev_indices_size,
+              indices_.size() - prev_indices_size),
+          buf);
       as_buf_[handle] = std::move(buf);
 
-      gas_handles_tri_.clear();
       gas_handles_tri_.push_back(handle);
       ias_handle_tri_ =
           rt_engine_.BuildInstanceAccel(cuda_stream, gas_handles_tri_, buf);
+
+      if (as_buf_.find(ias_handle_tri_) != as_buf_.end()) {
+        as_buf_.erase(ias_handle_tri_);
+      }
+
       as_buf_[ias_handle_tri_] = std::move(buf);
     }
 
-    details::FillAABBs(cuda_stream, envelopes, aabbs_);
-    handle = rt_engine_.BuildAccelCustom(cuda_stream,
-                                         ArrayView<OptixAabb>(aabbs_), buf);
+    details::FillAABBs(cuda_stream, envelopes, aabbs_, true /* append */);
+    handle = rt_engine_.BuildAccelCustom(
+        cuda_stream,
+        ArrayView<OptixAabb>(
+            thrust::raw_pointer_cast(aabbs_.data()) + prev_geom_size,
+            curr_geom_size),
+        buf);
     as_buf_[handle] = std::move(buf);
-
-    gas_handles_.clear();
     gas_handles_.push_back(handle);
+
+    if (as_buf_.find(ias_handle_) != as_buf_.end()) {
+      as_buf_.erase(ias_handle_);
+    }
 
     ias_handle_ = rt_engine_.BuildInstanceAccel(cuda_stream, gas_handles_, buf);
     as_buf_[ias_handle_] = std::move(buf);
+    h_prefix_sum_.push_back(h_prefix_sum_.back() + curr_geom_size);
+    d_prefix_sum_ = h_prefix_sum_;
   }
 
   void ContainsWhatQuery(ArrayView<point_t> queries, result_queue_t& result,
@@ -189,6 +238,7 @@ class SpatialIndex {
     }
     details::LaunchParamsContainsPoint<COORD_T, N_DIMS> params;
 
+    params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
     params.queries = queries;
     params.envelopes = ArrayView<envelope_t>(envelopes_);
     params.result = result.DeviceObject();
@@ -235,6 +285,7 @@ class SpatialIndex {
     }
     details::LaunchParamsContainsEnvelope<COORD_T, N_DIMS> params;
 
+    params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
     params.queries = queries;
     params.envelopes = ArrayView<envelope_t>(envelopes_);
     params.result = result.DeviceObject();
@@ -272,9 +323,18 @@ class SpatialIndex {
     double t_prepare_queries, t_build_bvh, t_forward_trace, t_backward_trace;
 
     sw.start();
-    details::FillAABBs(cuda_stream, queries, aabbs_queries_);
+    ray_params_queries_.resize(queries.size());
+    details::FillAABBs(cuda_stream, queries, aabbs_queries_,
+                       false /* append */);
+    thrust::transform(
+        thrust::cuda::par.on(cuda_stream), queries.begin(), queries.end(),
+        ray_params_queries_.begin(),
+        [] __device__(const Envelope<Point<COORD_T, N_DIMS>>& envelope) {
+          details::RayParams<COORD_T, N_DIMS> params;
+          params.Compute(envelope, true /* inverse */);
+          return params;
+        });
 
-    details::FillRayParams(cuda_stream, queries, ray_params_queries_, true);
     CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
     sw.stop();
     t_prepare_queries = sw.ms();
@@ -283,54 +343,15 @@ class SpatialIndex {
     OptixTraversableHandle handle_queries;
     handle_queries = rt_engine_.BuildAccelCustom(
         cuda_stream, ArrayView<OptixAabb>(aabbs_queries_), gas_buf_queries_,
-        true);
+        true /* prefer_fast_build */);
     CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
     sw.stop();
     t_build_bvh = sw.ms();
 
-#if 0
-    ArrayView<OptixAabb> aabbs(aabbs_);
-    ArrayView<OptixAabb> aabbs_queries(aabbs_queries_);
-    ArrayView<ray_params_t> ray_params_queries(ray_params_queries_);
-
-    thrust::for_each(
-        thrust::cuda::par.on(cuda_stream), thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(1), [=] __device__(int i) {
-          int envelope_id = 31;
-          int query_id = 290;
-          const auto& envelope = d_envelopes[envelope_id];
-          const auto& query = queries[query_id];
-          int xsect = envelope.Intersects(query);
-
-          printf(
-              "xsect %d %u %u, envelope x [%.4f, %.4f] y [%.4f, %.4f], query x "
-              "[%.4f, %.4f] y [%.4f, %.4f]\n",
-              xsect, envelope_id, query_id, envelope.get_min().get_x(),
-              envelope.get_max().get_x(), envelope.get_min().get_y(),
-              envelope.get_max().get_y(), query.get_min().get_x(),
-              query.get_max().get_x(), query.get_min().get_y(),
-              query.get_max().get_y());
-
-          assert(envelope_id < ray_params.size());
-          assert(query_id < aabbs_queries.size());
-          assert(query_id < ray_params_queries.size());
-          assert(envelope_id < aabbs.size());
-
-          bool xsect1 =
-              ray_params[envelope_id].HitAABB(aabbs_queries[query_id]);
-          bool xsect2 =
-              ray_params_queries[query_id].HitAABB(aabbs[envelope_id]);
-
-          ray_params[envelope_id].PrintParams("From Envelope");
-          ray_params_queries[query_id].PrintParams("From Query");
-
-          printf("xsect1 %d, xsect2 %d\n", xsect1, xsect2);
-        });
-#endif
-
     details::LaunchParamsIntersectsEnvelope<COORD_T, N_DIMS> params;
 
     // Query cast rays
+    params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
     params.envelopes = ArrayView<envelope_t>(envelopes_);
     params.queries = queries;
     params.ray_params = ArrayView<ray_params_t>(ray_params_);
@@ -387,8 +408,6 @@ class SpatialIndex {
               << " ms, backward " << t_backward_trace << " ms\n";
   }
 
-  void Insert(const ArrayView<envelope_t> envelopes) {}
-
   void Delete(const ArrayView<size_t> envelope_ids) {}
 
   void Update(const ArrayView<thrust::pair<size_t, envelope_t>> updates) {}
@@ -397,11 +416,14 @@ class SpatialIndex {
   details::RTEngine rt_engine_;
   // for base geometries
   device_uvector<envelope_t> envelopes_;
+  pinned_vector<size_t> h_prefix_sum_;
+  thrust::device_vector<size_t> d_prefix_sum_;  // prefix sum for each insertion
   // Customized AABBs
   device_uvector<OptixAabb> aabbs_;
-  // Builtin triangles
+  // Builtin triangles, contains only
   device_uvector<float3> vertices_;
   device_uvector<uint3> indices_;
+  // Intersection only
   device_uvector<ray_params_t> ray_params_;
   std::map<OptixTraversableHandle, thrust::device_vector<unsigned char>>
       as_buf_;
