@@ -12,7 +12,9 @@ extern "C" __constant__
         params;
 
 extern "C" __global__ void __intersection__contains_envelope_query_2d() {
-  auto envelope_id = optixGetPrimitiveIndex();
+  auto primitive_idx = optixGetPrimitiveIndex();
+  auto inst_id = optixGetInstanceId();
+  auto envelope_id = params.prefix_sum[inst_id] + primitive_idx;
   auto query_id = optixGetPayload_0();
   const auto& envelope = params.envelopes[envelope_id];
   const auto& query = params.queries[query_id];
