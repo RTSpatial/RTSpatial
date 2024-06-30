@@ -153,18 +153,18 @@ class RTEngine {
     buildSBT(config);
   }
 
-  OptixTraversableHandle UpdateAccelCustom(
-      cudaStream_t cuda_stream, OptixTraversableHandle handle,
-      ArrayView<OptixAabb> aabbs,
-      thrust::device_vector<unsigned char>& output_buf) {
-    return updateAccel(cuda_stream, handle, aabbs, output_buf);
-  }
-
   OptixTraversableHandle BuildAccelCustom(
       cudaStream_t cuda_stream, ArrayView<OptixAabb> aabbs,
       thrust::device_vector<unsigned char>& output_buf,
       bool prefer_fast_build = false) {
     return buildAccel(cuda_stream, aabbs, output_buf, prefer_fast_build);
+  }
+
+  OptixTraversableHandle UpdateAccelCustom(
+      cudaStream_t cuda_stream, OptixTraversableHandle handle,
+      ArrayView<OptixAabb> aabbs,
+      thrust::device_vector<unsigned char>& output_buf) {
+    return updateAccel(cuda_stream, handle, aabbs, output_buf);
   }
 
   OptixTraversableHandle BuildAccelTriangle(
@@ -195,6 +195,27 @@ class RTEngine {
     return buildInstanceAccel(cuda_stream,
                               ArrayView<OptixInstance>(tmp_instances_),
                               output_buf, prefer_fast_build);
+  }
+
+  OptixTraversableHandle UpdateInstanceAccel(
+      cudaStream_t cuda_stream, std::vector<OptixTraversableHandle>& handles,
+      thrust::device_vector<unsigned char>& output_buf,
+      bool prefer_fast_build = false) {
+    tmp_h_instances_.resize(handles.size());
+
+    for (size_t i = 0; i < handles.size(); i++) {
+      tmp_h_instances_[i].instanceId = i;
+      memcpy(tmp_h_instances_[i].transform, IDENTICAL_TRANSFORMATION_MTX,
+             sizeof(float) * 12);
+      tmp_h_instances_[i].traversableHandle = handles[i];
+      tmp_h_instances_[i].sbtOffset = 0;
+      tmp_h_instances_[i].visibilityMask = 255;
+      tmp_h_instances_[i].flags = OPTIX_INSTANCE_FLAG_NONE;
+    }
+    tmp_instances_ = tmp_h_instances_;
+    return updateInstanceAccel(cuda_stream,
+                               ArrayView<OptixInstance>(tmp_instances_),
+                               output_buf, prefer_fast_build);
   }
 
   void Render(cudaStream_t cuda_stream, ModuleIdentifier mod, dim3 dim);
@@ -239,6 +260,11 @@ class RTEngine {
       cudaStream_t cuda_stream, ArrayView<OptixAabb> aabbs,
       thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
 
+  OptixTraversableHandle updateAccel(
+      cudaStream_t cuda_stream, OptixTraversableHandle handle,
+      ArrayView<OptixAabb> aabbs,
+      thrust::device_vector<unsigned char>& output_buf);
+
   OptixTraversableHandle buildAccelTriangle(
       cudaStream_t cuda_stream, ArrayView<float3> vertices,
       ArrayView<uint3> indices,
@@ -248,10 +274,9 @@ class RTEngine {
       cudaStream_t cuda_stream, ArrayView<OptixInstance> instances,
       thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
 
-  OptixTraversableHandle updateAccel(
-      cudaStream_t cuda_stream, OptixTraversableHandle handle,
-      ArrayView<OptixAabb> aabbs,
-      thrust::device_vector<unsigned char>& output_buf);
+  OptixTraversableHandle updateInstanceAccel(
+      cudaStream_t cuda_stream, ArrayView<OptixInstance> instances,
+      thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
 
   std::vector<char> readData(const std::string& filename) {
     std::ifstream inputData(filename, std::ios::binary);

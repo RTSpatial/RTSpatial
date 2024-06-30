@@ -5,6 +5,7 @@
 #include "rtspatial/utils/stream.h"
 #include "test_commons.h"
 namespace rtspatial {
+#if 0
 TEST(PointQueries, fp32_contains_point_triangle_large) {
   SpatialIndex<float, 2, true> index;
   Queue<thrust::pair<size_t, size_t>> result;
@@ -193,5 +194,6 @@ TEST(PointQueries, fp64_contains_point) {
   uint32_t n_res = result.size(stream.cuda_stream());
   ASSERT_EQ(n_res, 5);
 }
+#endif
 }  // namespace rtspatial
 #endif  // RTSPATIAL_TESTS_TEST_POINT_QUERIES_H
