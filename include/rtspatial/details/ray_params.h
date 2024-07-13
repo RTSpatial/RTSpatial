@@ -54,14 +54,14 @@ struct RayParams<float, 2> {
   float2 d;  // ray direction
 
   DEV_HOST_INLINE void Compute(const Envelope<Point<float, 2>>& envelope,
-                               bool inverse) {
+                               bool diagonal) {
     const auto& min_corner = envelope.get_min();
     const auto& max_corner = envelope.get_max();
 
     float2 p1{min_corner.get_x(), min_corner.get_y()};
     float2 p2{max_corner.get_x(), max_corner.get_y()};
 
-    if (inverse) {
+    if (diagonal) {
       p1.x = max_corner.get_x();
       p1.y = min_corner.get_y();
       p2.x = min_corner.get_x();
@@ -72,11 +72,11 @@ struct RayParams<float, 2> {
     d = {p2.x - p1.x, p2.y - p1.y};
   }
 
-  DEV_HOST_INLINE void Compute(const OptixAabb& aabb, bool inverse) {
+  DEV_HOST_INLINE void Compute(const OptixAabb& aabb, bool diagonal) {
     float2 p1{aabb.minX, aabb.minY};
     float2 p2{aabb.maxX, aabb.maxY};
 
-    if (inverse) {
+    if (diagonal) {
       p1.x = aabb.maxX;
       p1.y = aabb.minY;
       p2.x = aabb.minX;

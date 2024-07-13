@@ -8,7 +8,7 @@
 #include "rtspatial/utils/stream.h"
 #include "test_commons.h"
 namespace rtspatial {
-#if 0
+#if 1
 TEST(EnvelopeQueries, fp32_intersects_envelope) {
   spatial_index_f2d_t index;
   pinned_vector<envelope_f2d_t> envelopes;

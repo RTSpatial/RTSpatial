@@ -5,7 +5,7 @@
 #include "rtspatial/utils/stream.h"
 #include "test_commons.h"
 namespace rtspatial {
-#if 0
+#if 1
 TEST(PointQueries, fp32_contains_point_triangle_large) {
   SpatialIndex<float, 2, true> index;
   Queue<thrust::pair<size_t, size_t>> result;
