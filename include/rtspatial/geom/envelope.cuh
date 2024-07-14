@@ -1,5 +1,6 @@
 #ifndef RTSPATIAL_GEOM_ENVELOPE_H
 #define RTSPATIAL_GEOM_ENVELOPE_H
+#include <optix_types.h>
 #include "rtspatial/geom/point.cuh"
 #include "rtspatial/utils/helpers.h"
 

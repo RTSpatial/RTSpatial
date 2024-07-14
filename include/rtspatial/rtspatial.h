@@ -1,7 +1,10 @@
-
 #ifndef RTSPATIAL_RTSPATIAL_H
 #define RTSPATIAL_RTSPATIAL_H
-namespace rtspatial {
+#include "rtspatial/geom/envelope.cuh"
+#include "rtspatial/geom/point.cuh"
+#include "rtspatial/spatial_index.cuh"
+#include "rtspatial/utils/queue.h"
+#include "rtspatial/utils/stream.h"
 
-}
+namespace rtspatial {}
 #endif  // RTSPATIAL_RTSPATIAL_H

@@ -1,7 +1,5 @@
 #ifndef RTSPATIAL_UTILS_HELPERS_H
 #define RTSPATIAL_UTILS_HELPERS_H
-#include <cuda_runtime.h>
-#include <optix_device.h>
 #include <vector_types.h>
 
 namespace rtspatial {

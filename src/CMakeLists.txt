@@ -1,6 +1,8 @@
 include_directories(${OptiX_INCLUDE})
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
+message("OptiX_INCLUDE: ${OptiX_INCLUDE}")
+
 set(OPTIX_MODULE_EXTENSION ".ptx")
 set(OPTIX_PROGRAM_TARGET "--ptx")
 
@@ -84,35 +86,50 @@ set_target_properties(rtspatial PROPERTIES CUDA_ARCHITECTURES "${ENABLED_ARCHS}"
 # Targets installation
 set(RTSPATIAL_BIN_DIR bin)
 set(RTSPATIAL_LIB_DIR lib)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
-install(TARGETS rtspatial
-        EXPORT librtspatialTargets
-        RUNTIME DESTINATION ${RTSPATIAL_BIN_DIR}
-        LIBRARY DESTINATION ${RTSPATIAL_LIB_DIR}
-        ARCHIVE DESTINATION ${RTSPATIAL_LIB_DIR})
-
-export(
-        TARGETS
-        rtspatial
-        NAMESPACE
-        rtspatial::
-        FILE
-        "${RTSPATIAL_LIB_DIR}/librtspatialTargets.cmake")
-
-install(
-        EXPORT
-        librtspatialTargets
-        DESTINATION
-        "${RTSPATIAL_LIB_DIR}/cmake/rtspatial")
-
-target_include_directories(rtspatial
-        INTERFACE
-        $<INSTALL_INTERFACE:include>)
-
+# Includes
 install(DIRECTORY ${RTSPATIAL_HDR_DIR}
         DESTINATION include/rtspatial
         FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.cuh")
 
+# Ptx
 install(DIRECTORY "${MODULE_TARGET_DIR}/ptx"
         DESTINATION "${RTSPATIAL_LIB_DIR}")
+
+install(FILES "${PROJECT_SOURCE_DIR}/cmake/FindOptiX.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/rtspatial")
+
+
+install(TARGETS rtspatial
+        EXPORT rtspatial-targets
+        RUNTIME DESTINATION ${RTSPATIAL_BIN_DIR}
+        LIBRARY DESTINATION ${RTSPATIAL_LIB_DIR}
+        ARCHIVE DESTINATION ${RTSPATIAL_LIB_DIR})
+
+install(EXPORT rtspatial-targets
+        FILE rtspatial-targets.cmake
+        NAMESPACE rtspatial::
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/rtspatial")
+
+write_basic_package_version_file(
+        "rtspatial-config-version.cmake"
+        VERSION ${RTSPATIAL_VERSION}
+        COMPATIBILITY AnyNewerVersion)
+
+set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR}/rtspatial CACHE PATH "Location of header files")
+set(LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR} CACHE PATH "Location of library files")
+
+configure_package_config_file("${PROJECT_SOURCE_DIR}/rtspatial-config.in.cmake"
+        "${PROJECT_BINARY_DIR}/rtspatial-config.cmake"
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rtspatial
+        PATH_VARS INCLUDE_INSTALL_DIR LIB_INSTALL_DIR)
+
+install(FILES "${PROJECT_BINARY_DIR}/rtspatial-config.cmake" "${CMAKE_CURRENT_BINARY_DIR}/rtspatial-config-version.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/rtspatial")
+
+target_include_directories(rtspatial
+        INTERFACE
+        $<INSTALL_INTERFACE:include>)
 

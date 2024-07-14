@@ -1,5 +1,6 @@
 #ifndef RTSPATIAL_GEOM_POINT_H
 #define RTSPATIAL_GEOM_POINT_H
+#include <vector_types.h>
 #include "rtspatial/utils/util.h"
 namespace rtspatial {
 
