@@ -11,6 +11,7 @@ set(SHADERS
         "${PROJECT_SOURCE_DIR}/src/shaders/shaders_contains_point_query_2d.cu"
         "${PROJECT_SOURCE_DIR}/src/shaders/shaders_contains_envelope_query_2d.cu"
         "${PROJECT_SOURCE_DIR}/src/shaders/shaders_intersects_envelope_query_2d.cu"
+        "${PROJECT_SOURCE_DIR}/src/shaders/shaders_intersects_envelope_query_2d_new.cu"
 )
 
 #set(SHADERS_HEADERS "${PROJECT_SOURCE_DIR}/include/details/launch_parameters.h")
@@ -71,7 +72,7 @@ include_directories("${PROJECT_SOURCE_DIR}/include")
 
 ###############################################################################
 # Library
-add_library(rtspatial ${RTPSATIAL_CU} ${ALL_PROGRAM_MODULES})
+add_library(rtspatial SHARED ${RTPSATIAL_CU} ${ALL_PROGRAM_MODULES})
 target_link_libraries(rtspatial
         ${CUDA_LIBRARIES}
         ${CUDA_CUDA_LIBRARY}

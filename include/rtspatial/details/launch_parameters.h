@@ -48,6 +48,8 @@ struct LaunchParamsIntersectsEnvelope {
   bool inverse;
   dev::Queue<thrust::pair<size_t, size_t>> result;
   OptixTraversableHandle handle;
+  uint32_t *n_hits;
+  ArrayView<OptixTraversableHandle> backward_handles;
 };
 }  // namespace details
 

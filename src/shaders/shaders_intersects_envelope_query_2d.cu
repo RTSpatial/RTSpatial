@@ -44,12 +44,15 @@ extern "C" __global__ void __intersection__intersects_envelope_query_2d() {
       bool box_hit = ray_params.HitAABB(aabb_query);
 
       //      bool box_hit = params.ray_params[envelope_id].HitAABB(aabb_query);
-
       if (!box_hit) {
         params.result.AppendWarp(thrust::make_pair(query_id, envelope_id));
+
+        atomicAdd(&params.n_hits[query_id], 1);
+
       }
     } else {
       params.result.AppendWarp(thrust::make_pair(envelope_id, query_id));
+      atomicAdd(&params.n_hits[query_id], 1);
     }
   }
 }
@@ -58,8 +61,12 @@ extern "C" __global__ void __raygen__intersects_envelope_query_2d() {
   using float2d_t = typename cuda_vec<FLOAT_TYPE>::type_2d;
   const auto& queries = params.queries;
 
-  for (auto i = optixGetLaunchIndex().x; i < queries.size();
+  // TODO: Split queries into multiple BVHs
+  // Cast multiple rays to the BVHs
+
+  for (auto i = optixGetLaunchIndex().x; i < params.queries.size();
        i += optixGetLaunchDimensions().x) {
+    //    auto query_id = params.begin_query + i;
     const auto& query = queries[i];
     rtspatial::details::RayParams<FLOAT_TYPE, 2> ray_params;
     float3 origin, dir;

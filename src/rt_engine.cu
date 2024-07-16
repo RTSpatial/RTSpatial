@@ -79,6 +79,40 @@ RTConfig get_default_rt_config(const std::string& exec_root) {
     Module mod;
 
     mod.set_id(
+        ModuleIdentifier::MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD);
+    mod.set_program_name(
+        exec_root + "/ptx/float_shaders_intersects_envelope_query_2d_new.ptx");
+    mod.set_function_suffix("intersects_envelope_query_2d_forward");
+    mod.set_launch_params_name("params");
+    mod.EnableIsIntersection();
+    mod.set_n_payload(2);
+
+    config.AddModule(mod);
+
+    mod.set_id(ModuleIdentifier::
+                   MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD);
+    mod.set_program_name(
+        exec_root + "/ptx/double_shaders_intersects_envelope_query_2d_new.ptx");
+    config.AddModule(mod);
+
+    mod.set_id(ModuleIdentifier::
+                   MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD);
+    mod.set_program_name(
+        exec_root + "/ptx/float_shaders_intersects_envelope_query_2d_new.ptx");
+    mod.set_function_suffix("intersects_envelope_query_2d_backward");
+    config.AddModule(mod);
+
+    mod.set_id(ModuleIdentifier::
+                   MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD);
+    mod.set_program_name(
+        exec_root + "/ptx/double_shaders_intersects_envelope_query_2d_new.ptx");
+    config.AddModule(mod);
+  }
+
+  {
+    Module mod;
+
+    mod.set_id(
         ModuleIdentifier::MODULE_ID_FLOAT_CONTAINS_POINT_QUERY_2D_TRIANGLE);
     mod.set_program_name(
         exec_root + "/ptx/float_shaders_contains_point_query_2d_triangle.ptx");
@@ -445,7 +479,8 @@ OptixTraversableHandle RTEngine::buildAccel(
   build_input.customPrimitiveArray.primitiveIndexOffset = 0;
 
   OptixAccelBuildOptions accelOptions = {};
-  accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_UPDATE;
+  accelOptions.buildFlags =
+      OPTIX_BUILD_FLAG_NONE;  // OPTIX_BUILD_FLAG_ALLOW_UPDATE;
   // FIXME: prefer_fast_build is consistent with updateAccel
   //  if (prefer_fast_build) {
   //    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;

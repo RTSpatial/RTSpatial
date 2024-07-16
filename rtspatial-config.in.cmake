@@ -16,7 +16,6 @@ include_directories(${OptiX_INCLUDE})
 
 message("OptiX_INCLUDE ${OptiX_INCLUDE}")
 
-
 include(FindPackageMessage)
 find_package_message(${RTSPATIAL_LIBRARIES}
         "Found rtspatial: ${CMAKE_CURRENT_LIST_FILE}"
