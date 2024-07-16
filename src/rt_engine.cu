@@ -496,14 +496,18 @@ OptixTraversableHandle RTEngine::buildAccel(
                                            1,  // num_build_inputs
                                            &blas_buffer_sizes));
 
-  temp_buf_.resize(blas_buffer_sizes.tempSizeInBytes);
-  output_buf.resize(blas_buffer_sizes.outputSizeInBytes);
+  size_t total_size =
+      blas_buffer_sizes.tempSizeInBytes + blas_buffer_sizes.outputSizeInBytes;
+  output_buf.resize(total_size);
+
+  //  temp_buf_.resize(blas_buffer_sizes.tempSizeInBytes);
+  //  output_buf.resize(blas_buffer_sizes.outputSizeInBytes);
 
   OPTIX_CHECK(optixAccelBuild(
       optix_context_, cuda_stream, &accelOptions, &build_input, 1,
-      THRUST_TO_CUPTR(temp_buf_.data()), temp_buf_.size(),
-      THRUST_TO_CUPTR(output_buf.data()), blas_buffer_sizes.outputSizeInBytes,
-      &traversable, nullptr, 0));
+      THRUST_TO_CUPTR(output_buf.data() + blas_buffer_sizes.outputSizeInBytes),
+      blas_buffer_sizes.tempSizeInBytes, THRUST_TO_CUPTR(output_buf.data()),
+      blas_buffer_sizes.outputSizeInBytes, &traversable, nullptr, 0));
   return traversable;
 }
 
