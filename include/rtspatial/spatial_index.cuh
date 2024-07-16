@@ -223,7 +223,7 @@ class SpatialIndex {
           stream, handle,
           ArrayView<OptixAabb>(thrust::raw_pointer_cast(aabbs_.data()) + begin,
                                size),
-          buf);
+          buf, false /*prefer_fast_build*/);
       assert(new_handle == handle);
     }
 
@@ -349,7 +349,7 @@ class SpatialIndex {
     OptixTraversableHandle handle_queries;
     handle_queries = rt_engine_.BuildAccelCustom(
         cuda_stream, ArrayView<OptixAabb>(aabbs_queries_), gas_buf_queries_,
-        false /* prefer_fast_build */);
+        true /* prefer_fast_build */);
     CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
     sw.stop();
     t_build_bvh = sw.ms();
@@ -445,7 +445,7 @@ class SpatialIndex {
   }
 
   void IntersectsWhatQueryLB(const ArrayView<envelope_t> queries,
-                             result_queue_t& result,
+                             result_queue_t& result, int parallelism,
                              cudaStream_t cuda_stream = nullptr) {
     if (queries.empty() || envelopes_.empty()) {
       return;
@@ -519,7 +519,7 @@ class SpatialIndex {
     }
     n_hits.resize(envelopes_.size(), 0);
 
-    int num_handles = 100;
+    int num_handles = parallelism;
     size_t num_queries_per_bvh =
         (aabbs_queries_.size() + num_handles - 1) / num_handles;
 
@@ -527,17 +527,19 @@ class SpatialIndex {
     backward_gas_buf_.resize(num_handles);
     h_backward_gas_handles_.resize(num_handles);
 
+    Stopwatch sw1;
     sw.start();
     for (int handle_id = 0; handle_id < num_handles; handle_id++) {
       auto begin = handle_id * num_queries_per_bvh;
       auto end = std::min(begin + num_queries_per_bvh, aabbs_queries_.size());
       auto size = end - begin;
-
+      sw1.start();
       h_backward_gas_handles_[handle_id] = rt_engine_.BuildAccelCustom(
           cuda_stream,
           ArrayView<OptixAabb>(
               thrust::raw_pointer_cast(aabbs_queries_.data()) + begin, size),
-          backward_gas_buf_[handle_id], false /* prefer_fast_build */);
+          backward_gas_buf_[handle_id], true /* prefer_fast_build */);
+      sw1.stop();
       h_backward_prefix_sum_[handle_id + 1] =
           h_backward_prefix_sum_[handle_id] + size;
     }
@@ -589,7 +591,7 @@ class SpatialIndex {
                 << result.size(cuda_stream) << " total hits " << total_hits
                 << " max hits " << max_hits << "\n";
     }
-    std::cout << "Prepare params " << t_prepare_queries << " ms, query BVH "
+    std::cout << "Prepare params " << t_prepare_queries << " ms, build BVH "
               << t_build_bvh << " ms, forward " << t_forward_trace
               << " ms, backward " << t_backward_trace << " ms\n";
     //    sw.start();

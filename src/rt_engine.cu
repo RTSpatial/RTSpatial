@@ -481,11 +481,11 @@ OptixTraversableHandle RTEngine::buildAccel(
   OptixAccelBuildOptions accelOptions = {};
   accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_UPDATE;
   // FIXME: prefer_fast_build is consistent with updateAccel
-  //    if (prefer_fast_build) {
-  //      accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
-  //    } else {
-  //      accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
-  //    }
+  if (prefer_fast_build) {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
+  } else {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+  }
   accelOptions.motionOptions.numKeys = 1;
   accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
 
@@ -514,7 +514,7 @@ OptixTraversableHandle RTEngine::buildAccel(
 OptixTraversableHandle RTEngine::updateAccel(
     cudaStream_t cuda_stream, OptixTraversableHandle handle,
     ArrayView<OptixAabb> aabbs,
-    thrust::device_vector<unsigned char>& output_buf) {
+    thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build) {
   OptixBuildInput build_input = {};
   CUdeviceptr d_aabb = THRUST_TO_CUPTR(aabbs.data());
   // Setup AABB build input. Don't disable AH.
@@ -544,6 +544,11 @@ OptixTraversableHandle RTEngine::updateAccel(
   accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_UPDATE;
   accelOptions.motionOptions.numKeys = 1;
   accelOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
+  if (prefer_fast_build) {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
+  } else {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+  }
 
   OptixAccelBufferSizes blas_buffer_sizes;
   OPTIX_CHECK(optixAccelComputeMemoryUsage(optix_context_, &accelOptions,

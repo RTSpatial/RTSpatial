@@ -7,3 +7,4 @@ DEFINE_double(load_factor,0.1, "");
 DEFINE_string(predicate, "", "predicate, contains, intersects");
 DEFINE_int32(limit_box, -1, "");
 DEFINE_int32(limit_query, -1, "");
+DEFINE_int32(parallelism, 1, "number of BVHs and rays");

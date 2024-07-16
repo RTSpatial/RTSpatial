@@ -167,8 +167,10 @@ class RTEngine {
   OptixTraversableHandle UpdateAccelCustom(
       cudaStream_t cuda_stream, OptixTraversableHandle handle,
       ArrayView<OptixAabb> aabbs,
-      thrust::device_vector<unsigned char>& output_buf) {
-    return updateAccel(cuda_stream, handle, aabbs, output_buf);
+      thrust::device_vector<unsigned char>& output_buf,
+      bool prefer_fast_build = false) {
+    return updateAccel(cuda_stream, handle, aabbs, output_buf,
+                       prefer_fast_build);
   }
 
   OptixTraversableHandle BuildAccelTriangle(
@@ -267,7 +269,7 @@ class RTEngine {
   OptixTraversableHandle updateAccel(
       cudaStream_t cuda_stream, OptixTraversableHandle handle,
       ArrayView<OptixAabb> aabbs,
-      thrust::device_vector<unsigned char>& output_buf);
+      thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
 
   OptixTraversableHandle buildAccelTriangle(
       cudaStream_t cuda_stream, ArrayView<float3> vertices,
