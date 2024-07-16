@@ -479,14 +479,13 @@ OptixTraversableHandle RTEngine::buildAccel(
   build_input.customPrimitiveArray.primitiveIndexOffset = 0;
 
   OptixAccelBuildOptions accelOptions = {};
-  accelOptions.buildFlags =
-      OPTIX_BUILD_FLAG_NONE;  // OPTIX_BUILD_FLAG_ALLOW_UPDATE;
+  accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_UPDATE;
   // FIXME: prefer_fast_build is consistent with updateAccel
-  //  if (prefer_fast_build) {
-  //    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
-  //  } else {
-  //    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
-  //  }
+  //    if (prefer_fast_build) {
+  //      accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
+  //    } else {
+  //      accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+  //    }
   accelOptions.motionOptions.numKeys = 1;
   accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
 
@@ -500,14 +499,15 @@ OptixTraversableHandle RTEngine::buildAccel(
       blas_buffer_sizes.tempSizeInBytes + blas_buffer_sizes.outputSizeInBytes;
   output_buf.resize(total_size);
 
-  //  temp_buf_.resize(blas_buffer_sizes.tempSizeInBytes);
-  //  output_buf.resize(blas_buffer_sizes.outputSizeInBytes);
+  // temp buf is allowed to free after calling optixAccelBuild
+  temp_buf_.resize(blas_buffer_sizes.tempSizeInBytes);
+  output_buf.resize(blas_buffer_sizes.outputSizeInBytes);
 
   OPTIX_CHECK(optixAccelBuild(
       optix_context_, cuda_stream, &accelOptions, &build_input, 1,
-      THRUST_TO_CUPTR(output_buf.data() + blas_buffer_sizes.outputSizeInBytes),
-      blas_buffer_sizes.tempSizeInBytes, THRUST_TO_CUPTR(output_buf.data()),
-      blas_buffer_sizes.outputSizeInBytes, &traversable, nullptr, 0));
+      THRUST_TO_CUPTR(temp_buf_.data()), blas_buffer_sizes.tempSizeInBytes,
+      THRUST_TO_CUPTR(output_buf.data()), blas_buffer_sizes.outputSizeInBytes,
+      &traversable, nullptr, 0));
   return traversable;
 }
 
