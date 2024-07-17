@@ -41,8 +41,6 @@ struct LaunchParamsIntersectsEnvelope {
   ArrayView<size_t> prefix_sum;
   ArrayView<envelope_t> envelopes;
   ArrayView<envelope_t> queries;
-  ArrayView<ray_params_t> ray_params;
-  ArrayView<ray_params_t> ray_params_queries;
   ArrayView<OptixAabb> aabbs;
   ArrayView<OptixAabb> aabbs_queries;
   bool inverse;

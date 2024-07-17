@@ -5,7 +5,6 @@
 #include <thrust/for_each.h>
 #include <thrust/unique.h>
 
-#include "rtspatial/details/ray_params.h"
 #include "rtspatial/details/rt_engine.h"
 #include "rtspatial/geom/envelope.cuh"
 #include "rtspatial/geom/point.cuh"
@@ -66,7 +65,6 @@ template <typename COORD_T, int N_DIMS, bool USE_TRIANGLE = false>
 class SpatialIndex {
   static_assert(std::is_floating_point<COORD_T>::value,
                 "Unsupported COORD_T type");
-  using ray_params_t = details::RayParams<COORD_T, N_DIMS>;
 
  public:
   using point_t = Point<COORD_T, N_DIMS>;
@@ -90,13 +88,11 @@ class SpatialIndex {
     aabbs_.clear();
     vertices_.clear();
     indices_.clear();
-    ray_params_.clear();
     as_buf_.clear();
     gas_handles_.clear();
     gas_handles_tri_.clear();
     aabbs_queries_.clear();
     gas_buf_queries_.clear();
-    ray_params_queries_.clear();
     h_prefix_sum_.clear();
     h_prefix_sum_.push_back(0);
   }
@@ -110,20 +106,10 @@ class SpatialIndex {
     size_t prev_size = envelopes_.size();
 
     envelopes_.resize(envelopes_.size() + curr_size);
-    ray_params_.resize(ray_params_.size() + curr_size);
     aabbs_.resize(aabbs_.size() + curr_size);
 
     thrust::copy(thrust::cuda::par.on(cuda_stream), envelopes.begin(),
                  envelopes.end(), envelopes_.begin() + prev_size);
-
-    thrust::transform(
-        thrust::cuda::par.on(cuda_stream), envelopes.begin(), envelopes.end(),
-        ray_params_.begin() + prev_size,
-        [] __device__(const Envelope<Point<COORD_T, N_DIMS>>& envelope) {
-          ray_params_t params;
-          params.Compute(envelope, false /* inverse */);
-          return params;
-        });
 
     OptixTraversableHandle handle;
     thrust::device_vector<unsigned char> buf;
@@ -186,7 +172,6 @@ class SpatialIndex {
     touched_batch_ids_.Init(d_prefix_sum_.size() - 1);
     ArrayView<envelope_t> v_envelopes(envelopes_);
     ArrayView<OptixAabb> v_aabbs(aabbs_);
-    ArrayView<ray_params_t> v_ray_params(ray_params_);
     ArrayView<size_t> v_prefix_sum(d_prefix_sum_);
     auto v_touched_batch_ids = touched_batch_ids_.DeviceObject();
     size_t max_id = h_prefix_sum_.back();
@@ -196,12 +181,10 @@ class SpatialIndex {
         [=] __device__(const thrust::pair<size_t, envelope_t>& pair) mutable {
           size_t idx = pair.first;
           const auto& envelope = pair.second;
-          auto& ray_param = v_ray_params[idx];
 
           assert(idx < max_id);
           v_aabbs[idx] = details::EnvelopeToOptixAabb(envelope);
           v_envelopes[idx] = envelope;
-          ray_param.Compute(envelope, false /* inverse */);
 
           auto it = thrust::upper_bound(thrust::seq, v_prefix_sum.begin(),
                                         v_prefix_sum.end(), idx);
@@ -321,26 +304,16 @@ class SpatialIndex {
     }
 
     ArrayView<envelope_t> d_envelopes(envelopes_);
-    ArrayView<ray_params_t> ray_params(ray_params_);
     Stopwatch sw;
     double t_prepare_queries, t_build_bvh, t_forward_trace, t_backward_trace;
 
     sw.start();
-    ray_params_queries_.resize(queries.size());
     aabbs_queries_.resize(queries.size());
     thrust::transform(thrust::cuda::par.on(cuda_stream), queries.begin(),
                       queries.end(), aabbs_queries_.begin(),
                       [] __device__(const envelope_t& envelope) {
                         return details::EnvelopeToOptixAabb(envelope);
                       });
-    thrust::transform(thrust::cuda::par.on(cuda_stream), queries.begin(),
-                      queries.end(), ray_params_queries_.begin(),
-                      [] __device__(const envelope_t& envelope) {
-                        details::RayParams<COORD_T, N_DIMS> params;
-                        params.Compute(envelope, true /* inverse */);
-                        return params;
-                      });
-
     CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
     sw.stop();
     t_prepare_queries = sw.ms();
@@ -362,8 +335,6 @@ class SpatialIndex {
     params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
     params.envelopes = ArrayView<envelope_t>(envelopes_);
     params.queries = queries;
-    params.ray_params = ArrayView<ray_params_t>(ray_params_);
-    params.ray_params_queries = ArrayView<ray_params_t>(ray_params_queries_);
     params.aabbs = ArrayView<OptixAabb>(aabbs_);
     params.aabbs_queries = ArrayView<OptixAabb>(aabbs_queries_);
     params.result = result.DeviceObject();
@@ -410,7 +381,6 @@ class SpatialIndex {
 
     // Ray tracing from base envelopes
     params.envelopes.Swap(params.queries);
-    params.ray_params.Swap(params.ray_params_queries);
     params.aabbs.Swap(params.aabbs_queries);
     params.handle = handle_queries;
     params.inverse = true;
@@ -619,7 +589,6 @@ class SpatialIndex {
   device_uvector<float3> vertices_;
   device_uvector<uint3> indices_;
   // Intersection only
-  device_uvector<ray_params_t> ray_params_;
   std::map<OptixTraversableHandle, thrust::device_vector<unsigned char>>
       as_buf_;
   std::vector<OptixTraversableHandle> gas_handles_;
@@ -629,7 +598,6 @@ class SpatialIndex {
   // for queries, updated for every batch of queries
   device_uvector<OptixAabb> aabbs_queries_;
   thrust::device_vector<unsigned char> gas_buf_queries_;
-  device_uvector<ray_params_t> ray_params_queries_;
   thrust::device_vector<uint32_t> n_hits;
 
   // backward
