@@ -98,7 +98,7 @@ DEV_HOST_INLINE OptixAabb EnvelopeToOptixAabb<float, 2>(
   aabb.maxX = max_point.get_x();
   aabb.minY = min_point.get_y();
   aabb.maxY = max_point.get_y();
-  aabb.minZ = aabb.maxZ = layer * AABB_Z_SCALE;
+  aabb.minZ = aabb.maxZ = layer;
   return aabb;
 }
 
@@ -112,7 +112,7 @@ DEV_HOST_INLINE OptixAabb EnvelopeToOptixAabb<double, 2>(
   aabb.maxX = next_float_from_double(max_point.get_x(), 1, 2);
   aabb.minY = next_float_from_double(min_point.get_y(), -1, 2);
   aabb.maxY = next_float_from_double(max_point.get_y(), 1, 2);
-  aabb.minZ = aabb.maxZ = layer * AABB_Z_SCALE;
+  aabb.minZ = aabb.maxZ = layer;
   return aabb;
 }
 }  // namespace details

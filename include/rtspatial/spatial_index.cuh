@@ -641,7 +641,7 @@ class SpatialIndex {
     }
     n_hits.resize(envelopes_.size(), 0);
 
-    parallelism = std::min(parallelism, AABB_Z_SCALE);
+//    parallelism = std::min(parallelism, AABB_Z_SCALE);
 
     sw.start();
     aabbs_queries_.resize(queries.size());

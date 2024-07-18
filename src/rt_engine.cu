@@ -503,7 +503,7 @@ OptixTraversableHandle RTEngine::buildAccel(
   CUdeviceptr d_aabb = THRUST_TO_CUPTR(aabbs.data());
   // Setup AABB build input. Don't disable AH.
   // OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT
-  uint32_t build_input_flags[1] = {OPTIX_GEOMETRY_FLAG_NONE};
+  uint32_t build_input_flags[1] = {OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL};
   uint32_t num_prims = aabbs.size();
 
   assert(reinterpret_cast<uint64_t>(aabbs.data()) %

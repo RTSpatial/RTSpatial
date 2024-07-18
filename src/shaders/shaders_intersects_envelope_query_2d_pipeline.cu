@@ -76,23 +76,28 @@ extern "C" __global__ void
 __intersection__intersects_envelope_query_2d_backward() {
   auto query_id = optixGetPrimitiveIndex();
   auto geom_id = optixGetPayload_0();
+  auto layer_id_from_ray = optixGetPayload_1();
+  auto layer_id_hit = query_id % optixGetLaunchDimensions().y;
 
-  const auto& envelope = params.geoms[geom_id];
-  const auto& query = params.queries[query_id];
+  // intersects may be invoked even though the ray and AABB has different z-axis
+  if (layer_id_from_ray == layer_id_hit) {
+    const auto& envelope = params.geoms[geom_id];
+    const auto& query = params.queries[query_id];
 
-  rtspatial::details::RayParams<FLOAT_TYPE, 2> ray_params;
+    rtspatial::details::RayParams<FLOAT_TYPE, 2> ray_params;
 
-  ray_params.Compute(envelope, false);  // anti-diagonal
-  bool query_hit = ray_params.IsHit(query);
+    ray_params.Compute(envelope, false);  // anti-diagonal
+    bool query_hit = ray_params.IsHit(query);
 
-  if (query_hit) {
-    ray_params.Compute(query, true);
+    if (query_hit) {
+      ray_params.Compute(query, true);
 
-    bool box_hit = ray_params.IsHit(envelope);
+      bool box_hit = ray_params.IsHit(envelope);
 
-    if (!box_hit) {
-      params.result.AppendWarp(thrust::make_pair(geom_id, query_id));
-      atomicAdd(&params.n_hits[query_id], 1);
+      if (!box_hit) {
+        params.result.AppendWarp(thrust::make_pair(geom_id, query_id));
+        atomicAdd(&params.n_hits[query_id], 1);
+      }
     }
   }
 }
@@ -108,7 +113,7 @@ extern "C" __global__ void __raygen__intersects_envelope_query_2d_backward() {
     ray_params.Compute(geom, false);  // anti-diagonal
     origin.x = ray_params.o.x;
     origin.y = ray_params.o.y;
-    origin.z = layer * AABB_Z_SCALE;
+    origin.z = layer;
 
     dir.x = ray_params.d.x;
     dir.y = ray_params.d.y;
@@ -123,6 +128,6 @@ extern "C" __global__ void __raygen__intersects_envelope_query_2d_backward() {
                SURFACE_RAY_TYPE,     // SBT offset
                RAY_TYPE_COUNT,       // SBT stride
                SURFACE_RAY_TYPE,     // missSBTIndex
-               geom_id);
+               geom_id, layer);
   }
 }
