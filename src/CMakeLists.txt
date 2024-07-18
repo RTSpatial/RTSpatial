@@ -12,6 +12,7 @@ set(SHADERS
         "${PROJECT_SOURCE_DIR}/src/shaders/shaders_contains_envelope_query_2d.cu"
         "${PROJECT_SOURCE_DIR}/src/shaders/shaders_intersects_envelope_query_2d.cu"
         "${PROJECT_SOURCE_DIR}/src/shaders/shaders_intersects_envelope_query_2d_new.cu"
+        "${PROJECT_SOURCE_DIR}/src/shaders/shaders_intersects_envelope_query_2d_pipeline.cu"
 )
 
 #set(SHADERS_HEADERS "${PROJECT_SOURCE_DIR}/include/details/launch_parameters.h")
@@ -30,7 +31,6 @@ foreach (FLOAT_TYPE IN LISTS FLOAT_TYPES)
             GENERATED_FILES PROGRAM_MODULES
             NVCC_OPTIONS "${OPTIX_PROGRAM_TARGET}"
             "--gpu-architecture=compute_${ENABLED_ARCHS}"
-            "--use_fast_math"
             "--relocatable-device-code=true"
             "--expt-relaxed-constexpr"
             "-Wno-deprecated-gpu-targets"
@@ -79,7 +79,7 @@ target_link_libraries(rtspatial
         ${CUDA_nvToolsExt_LIBRARY}
         cuda # CUcontext
 )
-target_compile_options(rtspatial PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda --expt-relaxed-constexpr --use_fast_math>)
+target_compile_options(rtspatial PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda --expt-relaxed-constexpr >)
 set_target_properties(rtspatial PROPERTIES CUDA_ARCHITECTURES "${ENABLED_ARCHS}" CUDA_SEPARABLE_COMPILATION ON)
 
 
