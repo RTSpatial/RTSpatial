@@ -31,6 +31,7 @@
 #define RTSPATIAL_UTILS_EVENT_POOL_H
 #include <cuda.h>
 
+#include <deque>
 #include <future>
 #include <utility>
 
