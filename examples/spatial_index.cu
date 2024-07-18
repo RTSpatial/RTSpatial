@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
   thrust::device_vector<Envelope<Point<coord_t, 2>>> d_boxes(boxes);
   std::cout << "Loaded boxes " << boxes.size() << std::endl;
 
-  SpatialIndex<coord_t, 2, true> index;
+  SpatialIndex<coord_t, 2, false> index;
   Queue<thrust::pair<size_t, size_t>> results;
   Stream stream;
   Stopwatch sw;
@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
         LoadBoxes<coord_t>(box_query_path, limit_query);
     std::cout << "Loaded box queries " << d_queries.size() << std::endl;
 
-    results.Init(std::max(1000u, (uint32_t) (d_boxes.size() * d_queries.size() *
+    results.Init(std::max(1000u, (uint32_t) (boxes.size() * d_queries.size() *
                                              FLAGS_load_factor)));
 
     sw.start();
@@ -67,6 +67,10 @@ int main(int argc, char* argv[]) {
           stream.cuda_stream());
     } else if (predicate == "intersects1") {
       index.IntersectsWhatQueryLB(
+          ArrayView<Envelope<Point<coord_t, 2>>>(d_queries), results,
+          FLAGS_parallelism, stream.cuda_stream());
+    } else if (predicate == "intersects2") {
+      index.IntersectsWhatQueryPipeline(
           ArrayView<Envelope<Point<coord_t, 2>>>(d_queries), results,
           FLAGS_parallelism, stream.cuda_stream());
     } else {
@@ -82,7 +86,7 @@ int main(int argc, char* argv[]) {
     thrust::device_vector<Point<coord_t, 2>> d_queries = queries;
     std::cout << "Loaded point queries " << d_queries.size() << std::endl;
 
-    results.Init(std::max(1000u, (uint32_t) (d_boxes.size() * d_queries.size() *
+    results.Init(std::max(1000u, (uint32_t) (boxes.size() * d_queries.size() *
                                              FLAGS_load_factor)));
 
     sw.start();

@@ -113,6 +113,48 @@ RTConfig get_default_rt_config(const std::string& exec_root) {
     Module mod;
 
     mod.set_id(
+        ModuleIdentifier::
+            MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_FORWARD);
+    mod.set_program_name(
+        exec_root +
+        "/ptx/float_shaders_intersects_envelope_query_2d_pipeline.ptx");
+    mod.set_function_suffix("intersects_envelope_query_2d_forward");
+    mod.set_launch_params_name("params");
+    mod.EnableIsIntersection();
+    mod.set_n_payload(2);
+
+    config.AddModule(mod);
+
+    mod.set_id(
+        ModuleIdentifier::
+            MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_FORWARD);
+    mod.set_program_name(
+        exec_root +
+        "/ptx/double_shaders_intersects_envelope_query_2d_pipeline.ptx");
+    config.AddModule(mod);
+
+    mod.set_id(
+        ModuleIdentifier::
+            MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_BACKWARD);
+    mod.set_program_name(
+        exec_root +
+        "/ptx/float_shaders_intersects_envelope_query_2d_pipeline.ptx");
+    mod.set_function_suffix("intersects_envelope_query_2d_backward");
+    config.AddModule(mod);
+
+    mod.set_id(
+        ModuleIdentifier::
+            MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_BACKWARD);
+    mod.set_program_name(
+        exec_root +
+        "/ptx/double_shaders_intersects_envelope_query_2d_pipeline.ptx");
+    config.AddModule(mod);
+  }
+
+  {
+    Module mod;
+
+    mod.set_id(
         ModuleIdentifier::MODULE_ID_FLOAT_CONTAINS_POINT_QUERY_2D_TRIANGLE);
     mod.set_program_name(
         exec_root + "/ptx/float_shaders_contains_point_query_2d_triangle.ptx");
@@ -500,14 +542,28 @@ OptixTraversableHandle RTEngine::buildAccel(
   output_buf.resize(total_size);
 
   // temp buf is allowed to free after calling optixAccelBuild
-  temp_buf_.resize(blas_buffer_sizes.tempSizeInBytes);
-  output_buf.resize(blas_buffer_sizes.outputSizeInBytes);
+  //  temp_buf_.resize(blas_buffer_sizes.tempSizeInBytes);
+  //  output_buf.resize(blas_buffer_sizes.outputSizeInBytes);
+  //
+  //  std::cout << "output size " << blas_buffer_sizes.outputSizeInBytes
+  //            << " tmp size " << blas_buffer_sizes.tempSizeInBytes <<
+  //            std::endl;
+  //
+  //  OPTIX_CHECK(optixAccelBuild(
+  //      optix_context_, cuda_stream, &accelOptions, &build_input, 1,
+  //      THRUST_TO_CUPTR(temp_buf_.data()), blas_buffer_sizes.tempSizeInBytes,
+  //      THRUST_TO_CUPTR(output_buf.data()),
+  //      blas_buffer_sizes.outputSizeInBytes, &traversable, nullptr, 0));
+
+  output_buf.resize(blas_buffer_sizes.outputSizeInBytes +
+                    blas_buffer_sizes.tempSizeInBytes);
 
   OPTIX_CHECK(optixAccelBuild(
       optix_context_, cuda_stream, &accelOptions, &build_input, 1,
-      THRUST_TO_CUPTR(temp_buf_.data()), blas_buffer_sizes.tempSizeInBytes,
-      THRUST_TO_CUPTR(output_buf.data()), blas_buffer_sizes.outputSizeInBytes,
-      &traversable, nullptr, 0));
+      THRUST_TO_CUPTR(output_buf.data() + blas_buffer_sizes.outputSizeInBytes),
+      blas_buffer_sizes.tempSizeInBytes, THRUST_TO_CUPTR(output_buf.data()),
+      blas_buffer_sizes.outputSizeInBytes, &traversable, nullptr, 0));
+
   return traversable;
 }
 
@@ -566,7 +622,7 @@ OptixTraversableHandle RTEngine::updateAccel(
   // execute build (main stage)
   // ==================================================================
   temp_buf_.resize(blas_buffer_sizes.tempUpdateSizeInBytes);
-  assert(output_buf.size() == blas_buffer_sizes.outputSizeInBytes);
+  assert(output_buf.size() >= blas_buffer_sizes.outputSizeInBytes);
   OPTIX_CHECK(
       optixAccelBuild(optix_context_, cuda_stream, &accelOptions, &build_input,
                       1, THRUST_TO_CUPTR(temp_buf_.data()), temp_buf_.size(),

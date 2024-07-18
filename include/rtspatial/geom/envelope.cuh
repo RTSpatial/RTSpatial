@@ -1,9 +1,10 @@
 #ifndef RTSPATIAL_GEOM_ENVELOPE_H
 #define RTSPATIAL_GEOM_ENVELOPE_H
 #include <optix_types.h>
+
+#include "rtspatial/details/config.h"
 #include "rtspatial/geom/point.cuh"
 #include "rtspatial/utils/helpers.h"
-
 namespace rtspatial {
 template <typename POINT_T>
 class Envelope {
@@ -83,6 +84,37 @@ EnvelopeToOptixAabb<double, 2>(const Envelope<Point<double, 2>>& envelope) {
   return aabb;
 }
 
+template <typename COORD_T, int N_DIMS>
+DEV_HOST_INLINE OptixAabb EnvelopeToOptixAabb(
+    const Envelope<Point<COORD_T, N_DIMS>>& envelope, int layer) {}
+
+template <>
+DEV_HOST_INLINE OptixAabb EnvelopeToOptixAabb<float, 2>(
+    const Envelope<Point<float, 2>>& envelope, int layer) {
+  OptixAabb aabb;
+  const auto& min_point = envelope.get_min();
+  const auto& max_point = envelope.get_max();
+  aabb.minX = min_point.get_x();
+  aabb.maxX = max_point.get_x();
+  aabb.minY = min_point.get_y();
+  aabb.maxY = max_point.get_y();
+  aabb.minZ = aabb.maxZ = layer * AABB_Z_SCALE;
+  return aabb;
+}
+
+template <>
+DEV_HOST_INLINE OptixAabb EnvelopeToOptixAabb<double, 2>(
+    const Envelope<Point<double, 2>>& envelope, int layer) {
+  OptixAabb aabb;
+  const auto& min_point = envelope.get_min();
+  const auto& max_point = envelope.get_max();
+  aabb.minX = next_float_from_double(min_point.get_x(), -1, 2);
+  aabb.maxX = next_float_from_double(max_point.get_x(), 1, 2);
+  aabb.minY = next_float_from_double(min_point.get_y(), -1, 2);
+  aabb.maxY = next_float_from_double(max_point.get_y(), 1, 2);
+  aabb.minZ = aabb.maxZ = layer * AABB_Z_SCALE;
+  return aabb;
+}
 }  // namespace details
 }  // namespace rtspatial
 #endif  // RTSPATIAL_GEOM_ENVELOPE_H

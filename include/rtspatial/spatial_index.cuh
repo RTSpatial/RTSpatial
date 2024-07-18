@@ -10,6 +10,7 @@
 #include "rtspatial/geom/point.cuh"
 #include "rtspatial/utils/array_view.h"
 #include "rtspatial/utils/bitset.h"
+#include "rtspatial/utils/event_pool.h"
 #include "rtspatial/utils/helpers.h"
 #include "rtspatial/utils/queue.h"
 #include "rtspatial/utils/stopwatch.h"
@@ -76,6 +77,7 @@ class SpatialIndex {
 
     rt_engine_.Init(config);
     Clear();
+    ev_pool_.CacheEvents(500);
   }
 
   void Reserve(size_t capacity) {
@@ -513,6 +515,7 @@ class SpatialIndex {
       h_backward_prefix_sum_[handle_id + 1] =
           h_backward_prefix_sum_[handle_id] + size;
     }
+
     CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
     sw.stop();
     t_build_bvh = sw.ms();
@@ -576,8 +579,148 @@ class SpatialIndex {
     //    std::cout << "sort time " << sw.ms() << std::endl;
   }
 
+  void IntersectsWhatQueryPipeline(const ArrayView<envelope_t> queries,
+                                   result_queue_t& result, int parallelism,
+                                   cudaStream_t cuda_stream = nullptr) {
+    if (queries.empty() || envelopes_.empty()) {
+      return;
+    }
+
+    ArrayView<envelope_t> d_envelopes(envelopes_);
+    Stopwatch sw;
+    double t_prepare_queries, t_build_bvh, t_forward_trace, t_backward_trace;
+
+    n_hits.resize(queries.size(), 0);
+
+    details::LaunchParamsIntersectsEnvelopeNew<COORD_T, N_DIMS> params;
+
+    // Query cast rays
+    params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
+    params.geoms = ArrayView<envelope_t>(envelopes_);
+    params.queries = queries;
+    params.result = result.DeviceObject();
+    params.handle = ias_handle_;
+    params.n_hits = thrust::raw_pointer_cast(n_hits.data());
+
+    details::ModuleIdentifier id;
+    if (std::is_same<COORD_T, float>::value) {
+      id = details::ModuleIdentifier::
+          MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_FORWARD;
+    } else if (std::is_same<COORD_T, double>::value) {
+      id = details::ModuleIdentifier::
+          MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_FORWARD;
+    }
+
+    dim3 dims;
+
+    dims.x = queries.size();
+    dims.y = 1;
+    dims.z = 1;
+
+    n_hits.resize(params.queries.size(), 0);
+
+    sw.start();
+    rt_engine_.CopyLaunchParams(cuda_stream, params);
+    rt_engine_.Render(cuda_stream, id, dims);
+    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
+    sw.stop();
+    t_forward_trace = sw.ms();
+
+    {
+      pinned_vector<uint32_t> h_n_hits = n_hits;
+      uint32_t total_hits = 0, max_hits = 0;
+
+      for (int i = 0; i < h_n_hits.size(); i++) {
+        max_hits = std::max(max_hits, h_n_hits[i]);
+        total_hits += h_n_hits[i];
+      }
+
+      std::cout << "First batch rays " << dims.x << " results size "
+                << result.size(cuda_stream) << " total hits " << total_hits
+                << " max hits " << max_hits << "\n";
+    }
+    n_hits.resize(envelopes_.size(), 0);
+
+    parallelism = std::min(parallelism, AABB_Z_SCALE);
+
+    sw.start();
+    aabbs_queries_.resize(queries.size());
+    ArrayView<OptixAabb> v_aabbs_queries(aabbs_queries_);
+    thrust::transform(thrust::cuda::par.on(cuda_stream),
+                      thrust::make_counting_iterator<size_t>(0),
+                      thrust::make_counting_iterator<size_t>(queries.size()),
+                      aabbs_queries_.begin(), [=] __device__(size_t i) mutable {
+                        size_t layer = i % parallelism;
+                        return details::EnvelopeToOptixAabb(queries[i], layer);
+                      });
+    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
+    sw.stop();
+    t_prepare_queries = sw.ms();
+
+    Stopwatch sw1;
+    sw.start();
+    OptixTraversableHandle handle = rt_engine_.BuildAccelCustom(
+        cuda_stream, v_aabbs_queries, gas_buf_queries_,
+        true /* prefer_fast_build */);
+    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
+    sw.stop();
+    t_build_bvh = sw.ms();
+
+    std::cout << "BVH build " << t_build_bvh << " ms" << std::endl;
+
+    // Ray tracing from base envelopes
+    params.n_hits = thrust::raw_pointer_cast(n_hits.data());
+    params.handle = handle;
+
+    dims.x = params.geoms.size();
+    dims.y = parallelism;
+
+    if (std::is_same<COORD_T, float>::value) {
+      id = details::ModuleIdentifier::
+          MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_BACKWARD;
+    } else if (std::is_same<COORD_T, double>::value) {
+      id = details::ModuleIdentifier::
+          MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_BACKWARD;
+    }
+
+    sw.start();
+    rt_engine_.CopyLaunchParams(cuda_stream, params);
+    rt_engine_.Render(cuda_stream, id, dims);
+    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
+    sw.stop();
+    t_backward_trace = sw.ms();
+
+    {
+      pinned_vector<uint32_t> h_n_hits = n_hits;
+      uint32_t total_hits = 0, max_hits = 0;
+
+      for (int i = 0; i < h_n_hits.size(); i++) {
+        max_hits = std::max(max_hits, h_n_hits[i]);
+        total_hits += h_n_hits[i];
+      }
+
+      std::cout << "Second batch rays " << dims.x << " results size "
+                << result.size(cuda_stream) << " total hits " << total_hits
+                << " max hits " << max_hits << "\n";
+    }
+    std::cout << "Prepare params " << t_prepare_queries << " ms, build BVH "
+              << t_build_bvh << " ms, forward " << t_forward_trace
+              << " ms, backward " << t_backward_trace << " ms\n";
+    //    sw.start();
+    //    thrust::sort(thrust::cuda::par.on(cuda_stream), result.data(),
+    //                 result.data() + result.size(cuda_stream));
+    //    auto end = thrust::unique(thrust::cuda::par.on(cuda_stream),
+    //    result.data(),
+    //                              result.data() + result.size(cuda_stream));
+    //    result.set_size(end - result.data());
+    //    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
+    //    sw.stop();
+    //    std::cout << "sort time " << sw.ms() << std::endl;
+  }
+
  private:
   details::RTEngine rt_engine_;
+  EventPool ev_pool_;
   // for base geometries
   device_uvector<envelope_t> envelopes_;
   pinned_vector<size_t> h_prefix_sum_;
