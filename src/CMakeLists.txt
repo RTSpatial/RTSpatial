@@ -11,8 +11,6 @@ set(SHADERS
         "${PROJECT_SOURCE_DIR}/src/shaders/shaders_contains_point_query_2d.cu"
         "${PROJECT_SOURCE_DIR}/src/shaders/shaders_contains_envelope_query_2d.cu"
         "${PROJECT_SOURCE_DIR}/src/shaders/shaders_intersects_envelope_query_2d.cu"
-        "${PROJECT_SOURCE_DIR}/src/shaders/shaders_intersects_envelope_query_2d_new.cu"
-        "${PROJECT_SOURCE_DIR}/src/shaders/shaders_intersects_envelope_query_2d_pipeline.cu"
 )
 
 #set(SHADERS_HEADERS "${PROJECT_SOURCE_DIR}/include/details/launch_parameters.h")

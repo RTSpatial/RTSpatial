@@ -300,157 +300,21 @@ class SpatialIndex {
 
   void IntersectsWhatQuery(const ArrayView<envelope_t> queries,
                            result_queue_t& result,
-                           cudaStream_t cuda_stream = nullptr) {
+                           cudaStream_t cuda_stream = nullptr,
+                           int parallelism = 500) {
     if (queries.empty() || envelopes_.empty()) {
       return;
     }
 
     ArrayView<envelope_t> d_envelopes(envelopes_);
-    Stopwatch sw;
-    double t_prepare_queries, t_build_bvh, t_forward_trace, t_backward_trace;
-
-    sw.start();
-    aabbs_queries_.resize(queries.size());
-    thrust::transform(thrust::cuda::par.on(cuda_stream), queries.begin(),
-                      queries.end(), aabbs_queries_.begin(),
-                      [] __device__(const envelope_t& envelope) {
-                        return details::EnvelopeToOptixAabb(envelope);
-                      });
-    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    sw.stop();
-    t_prepare_queries = sw.ms();
-
-    sw.start();
-    OptixTraversableHandle handle_queries;
-    handle_queries = rt_engine_.BuildAccelCustom(
-        cuda_stream, ArrayView<OptixAabb>(aabbs_queries_), gas_buf_queries_,
-        true /* prefer_fast_build */);
-    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    sw.stop();
-    t_build_bvh = sw.ms();
-
-    n_hits.resize(queries.size(), 0);
-
     details::LaunchParamsIntersectsEnvelope<COORD_T, N_DIMS> params;
 
     // Query cast rays
     params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
-    params.envelopes = ArrayView<envelope_t>(envelopes_);
+    params.geoms = ArrayView<envelope_t>(envelopes_);
     params.queries = queries;
-    params.aabbs = ArrayView<OptixAabb>(aabbs_);
-    params.aabbs_queries = ArrayView<OptixAabb>(aabbs_queries_);
     params.result = result.DeviceObject();
     params.handle = ias_handle_;
-    params.inverse = false;
-    params.n_hits = thrust::raw_pointer_cast(n_hits.data());
-
-    details::ModuleIdentifier id;
-    if (std::is_same<COORD_T, float>::value) {
-      id = details::ModuleIdentifier::
-          MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D;
-    } else if (std::is_same<COORD_T, double>::value) {
-      id = details::ModuleIdentifier::
-          MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D;
-    }
-
-    dim3 dims;
-
-    dims.x = queries.size();
-    dims.y = 1;
-    dims.z = 1;
-
-    sw.start();
-    rt_engine_.CopyLaunchParams(cuda_stream, params);
-    rt_engine_.Render(cuda_stream, id, dims);
-    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    sw.stop();
-    t_forward_trace = sw.ms();
-    {
-      pinned_vector<uint32_t> h_n_hits = n_hits;
-      uint32_t total_hits = 0, max_hits = 0;
-
-      for (int i = 0; i < h_n_hits.size(); i++) {
-        max_hits = std::max(max_hits, h_n_hits[i]);
-        total_hits += h_n_hits[i];
-      }
-
-      std::cout << "First batch rays " << dims.x << " results size "
-                << result.size(cuda_stream) << " total hits " << total_hits
-                << " max hits " << max_hits << "\n";
-    }
-
-    n_hits.resize(envelopes_.size(), 0);
-
-    // Ray tracing from base envelopes
-    params.envelopes.Swap(params.queries);
-    params.aabbs.Swap(params.aabbs_queries);
-    params.handle = handle_queries;
-    params.inverse = true;
-    params.n_hits = thrust::raw_pointer_cast(n_hits.data());
-
-    sw.start();
-    dims.x = params.queries.size();
-    rt_engine_.CopyLaunchParams(cuda_stream, params);
-    rt_engine_.Render(cuda_stream, id, dims);
-    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    sw.stop();
-    t_backward_trace = sw.ms();
-
-    // TODO: Cut a long ray to many short rays for load balancing
-    {
-      pinned_vector<uint32_t> h_n_hits = n_hits;
-      uint32_t total_hits = 0, max_hits = 0;
-
-      for (int i = 0; i < h_n_hits.size(); i++) {
-        max_hits = std::max(max_hits, h_n_hits[i]);
-        total_hits += h_n_hits[i];
-      }
-
-      std::cout << "Second batch rays " << dims.x << " results size "
-                << result.size(cuda_stream) << " total hits " << total_hits
-                << " max hits " << max_hits << "\n";
-    }
-
-    std::cout << "Prepare params " << t_prepare_queries << " ms, build BVH "
-              << t_build_bvh << " ms, forward " << t_forward_trace
-              << " ms, backward " << t_backward_trace << " ms\n";
-  }
-
-  void IntersectsWhatQueryLB(const ArrayView<envelope_t> queries,
-                             result_queue_t& result, int parallelism,
-                             cudaStream_t cuda_stream = nullptr) {
-    if (queries.empty() || envelopes_.empty()) {
-      return;
-    }
-
-    ArrayView<envelope_t> d_envelopes(envelopes_);
-    Stopwatch sw;
-    double t_prepare_queries, t_build_bvh, t_forward_trace, t_backward_trace;
-
-    sw.start();
-    aabbs_queries_.resize(queries.size());
-    thrust::transform(thrust::cuda::par.on(cuda_stream), queries.begin(),
-                      queries.end(), aabbs_queries_.begin(),
-                      [] __device__(const envelope_t& envelope) {
-                        return details::EnvelopeToOptixAabb(envelope);
-                      });
-    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    sw.stop();
-    t_prepare_queries = sw.ms();
-
-    n_hits.resize(queries.size(), 0);
-
-    details::LaunchParamsIntersectsEnvelope<COORD_T, N_DIMS> params;
-
-    // Query cast rays
-    params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
-    params.envelopes = ArrayView<envelope_t>(envelopes_);
-    params.queries = queries;
-    params.aabbs = ArrayView<OptixAabb>(aabbs_);
-    params.aabbs_queries = ArrayView<OptixAabb>(aabbs_queries_);
-    params.result = result.DeviceObject();
-    params.handle = ias_handle_;
-    params.n_hits = thrust::raw_pointer_cast(n_hits.data());
 
     details::ModuleIdentifier id;
     if (std::is_same<COORD_T, float>::value) {
@@ -467,183 +331,9 @@ class SpatialIndex {
     dims.y = 1;
     dims.z = 1;
 
-    n_hits.resize(params.queries.size(), 0);
-
-    sw.start();
     rt_engine_.CopyLaunchParams(cuda_stream, params);
     rt_engine_.Render(cuda_stream, id, dims);
-    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    sw.stop();
-    t_forward_trace = sw.ms();
 
-    {
-      pinned_vector<uint32_t> h_n_hits = n_hits;
-      uint32_t total_hits = 0, max_hits = 0;
-
-      for (int i = 0; i < h_n_hits.size(); i++) {
-        max_hits = std::max(max_hits, h_n_hits[i]);
-        total_hits += h_n_hits[i];
-      }
-
-      std::cout << "First batch rays " << dims.x << " results size "
-                << result.size(cuda_stream) << " total hits " << total_hits
-                << " max hits " << max_hits << "\n";
-    }
-    n_hits.resize(envelopes_.size(), 0);
-
-    int num_handles = parallelism;
-    size_t num_queries_per_bvh =
-        (aabbs_queries_.size() + num_handles - 1) / num_handles;
-
-    h_backward_prefix_sum_.resize(num_handles + 1, 0);
-    backward_gas_buf_.resize(num_handles);
-    h_backward_gas_handles_.resize(num_handles);
-
-    Stopwatch sw1;
-    sw.start();
-    for (int handle_id = 0; handle_id < num_handles; handle_id++) {
-      auto begin = handle_id * num_queries_per_bvh;
-      auto end = std::min(begin + num_queries_per_bvh, aabbs_queries_.size());
-      auto size = end - begin;
-      sw1.start();
-      h_backward_gas_handles_[handle_id] = rt_engine_.BuildAccelCustom(
-          cuda_stream,
-          ArrayView<OptixAabb>(
-              thrust::raw_pointer_cast(aabbs_queries_.data()) + begin, size),
-          backward_gas_buf_[handle_id], true /* prefer_fast_build */);
-      sw1.stop();
-      h_backward_prefix_sum_[handle_id + 1] =
-          h_backward_prefix_sum_[handle_id] + size;
-    }
-
-    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    sw.stop();
-    t_build_bvh = sw.ms();
-
-    d_backward_gas_handles_ = h_backward_gas_handles_;
-    d_backward_prefix_sum_ = h_backward_prefix_sum_;
-
-    // Ray tracing from base envelopes
-    params.envelopes.Swap(params.queries);
-    params.aabbs.Swap(params.aabbs_queries);
-    params.backward_handles =
-        ArrayView<OptixTraversableHandle>(d_backward_gas_handles_);
-    params.prefix_sum = ArrayView<size_t>(d_backward_prefix_sum_);
-    params.n_hits = thrust::raw_pointer_cast(n_hits.data());
-    params.backward_handles =
-        ArrayView<OptixTraversableHandle>(d_backward_gas_handles_);
-
-    dims.x = params.queries.size();
-    dims.y = num_handles;
-
-    if (std::is_same<COORD_T, float>::value) {
-      id = details::ModuleIdentifier::
-          MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD;
-    } else if (std::is_same<COORD_T, double>::value) {
-      id = details::ModuleIdentifier::
-          MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD;
-    }
-
-    sw.start();
-    rt_engine_.CopyLaunchParams(cuda_stream, params);
-    rt_engine_.Render(cuda_stream, id, dims);
-    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    sw.stop();
-    t_backward_trace = sw.ms();
-
-    {
-      pinned_vector<uint32_t> h_n_hits = n_hits;
-      uint32_t total_hits = 0, max_hits = 0;
-
-      for (int i = 0; i < h_n_hits.size(); i++) {
-        max_hits = std::max(max_hits, h_n_hits[i]);
-        total_hits += h_n_hits[i];
-      }
-
-      std::cout << "Second batch rays " << dims.x << " results size "
-                << result.size(cuda_stream) << " total hits " << total_hits
-                << " max hits " << max_hits << "\n";
-    }
-    std::cout << "Prepare params " << t_prepare_queries << " ms, build BVH "
-              << t_build_bvh << " ms, forward " << t_forward_trace
-              << " ms, backward " << t_backward_trace << " ms\n";
-    //    sw.start();
-    //    thrust::sort(thrust::cuda::par.on(cuda_stream), result.data(),
-    //                 result.data() + result.size(cuda_stream));
-    //    auto end = thrust::unique(thrust::cuda::par.on(cuda_stream),
-    //    result.data(),
-    //                              result.data() + result.size(cuda_stream));
-    //    result.set_size(end - result.data());
-    //    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    //    sw.stop();
-    //    std::cout << "sort time " << sw.ms() << std::endl;
-  }
-
-  void IntersectsWhatQueryPipeline(const ArrayView<envelope_t> queries,
-                                   result_queue_t& result, int parallelism,
-                                   cudaStream_t cuda_stream = nullptr) {
-    if (queries.empty() || envelopes_.empty()) {
-      return;
-    }
-
-    ArrayView<envelope_t> d_envelopes(envelopes_);
-    Stopwatch sw;
-    double t_prepare_queries, t_build_bvh, t_forward_trace, t_backward_trace;
-
-    n_hits.resize(queries.size(), 0);
-
-    details::LaunchParamsIntersectsEnvelopeNew<COORD_T, N_DIMS> params;
-
-    // Query cast rays
-    params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
-    params.geoms = ArrayView<envelope_t>(envelopes_);
-    params.queries = queries;
-    params.result = result.DeviceObject();
-    params.handle = ias_handle_;
-    params.n_hits = thrust::raw_pointer_cast(n_hits.data());
-
-    details::ModuleIdentifier id;
-    if (std::is_same<COORD_T, float>::value) {
-      id = details::ModuleIdentifier::
-          MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_FORWARD;
-    } else if (std::is_same<COORD_T, double>::value) {
-      id = details::ModuleIdentifier::
-          MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_FORWARD;
-    }
-
-    dim3 dims;
-
-    dims.x = queries.size();
-    dims.y = 1;
-    dims.z = 1;
-
-    n_hits.resize(params.queries.size(), 0);
-
-    sw.start();
-    rt_engine_.CopyLaunchParams(cuda_stream, params);
-    rt_engine_.Render(cuda_stream, id, dims);
-    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    sw.stop();
-    t_forward_trace = sw.ms();
-
-    {
-      pinned_vector<uint32_t> h_n_hits = n_hits;
-      uint32_t total_hits = 0, max_hits = 0;
-
-      for (int i = 0; i < h_n_hits.size(); i++) {
-        max_hits = std::max(max_hits, h_n_hits[i]);
-        total_hits += h_n_hits[i];
-      }
-
-      std::cout << "First batch rays " << dims.x << " results size "
-                << result.size(cuda_stream) << " total hits " << total_hits
-                << " max hits " << max_hits << "\n";
-    }
-    n_hits.resize(envelopes_.size(), 0);
-
-//    parallelism = std::min(parallelism, AABB_Z_SCALE);
-
-    sw.start();
     aabbs_queries_.resize(queries.size());
     ArrayView<OptixAabb> v_aabbs_queries(aabbs_queries_);
     thrust::transform(thrust::cuda::par.on(cuda_stream),
@@ -653,23 +343,12 @@ class SpatialIndex {
                         size_t layer = i % parallelism;
                         return details::EnvelopeToOptixAabb(queries[i], layer);
                       });
-    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    sw.stop();
-    t_prepare_queries = sw.ms();
 
-    Stopwatch sw1;
-    sw.start();
     OptixTraversableHandle handle = rt_engine_.BuildAccelCustom(
         cuda_stream, v_aabbs_queries, gas_buf_queries_,
         true /* prefer_fast_build */);
-    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    sw.stop();
-    t_build_bvh = sw.ms();
-
-    std::cout << "BVH build " << t_build_bvh << " ms" << std::endl;
 
     // Ray tracing from base envelopes
-    params.n_hits = thrust::raw_pointer_cast(n_hits.data());
     params.handle = handle;
 
     dims.x = params.geoms.size();
@@ -677,45 +356,15 @@ class SpatialIndex {
 
     if (std::is_same<COORD_T, float>::value) {
       id = details::ModuleIdentifier::
-          MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_BACKWARD;
+          MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD;
     } else if (std::is_same<COORD_T, double>::value) {
       id = details::ModuleIdentifier::
-          MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_BACKWARD;
+          MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD;
     }
 
-    sw.start();
     rt_engine_.CopyLaunchParams(cuda_stream, params);
     rt_engine_.Render(cuda_stream, id, dims);
     CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    sw.stop();
-    t_backward_trace = sw.ms();
-
-    {
-      pinned_vector<uint32_t> h_n_hits = n_hits;
-      uint32_t total_hits = 0, max_hits = 0;
-
-      for (int i = 0; i < h_n_hits.size(); i++) {
-        max_hits = std::max(max_hits, h_n_hits[i]);
-        total_hits += h_n_hits[i];
-      }
-
-      std::cout << "Second batch rays " << dims.x << " results size "
-                << result.size(cuda_stream) << " total hits " << total_hits
-                << " max hits " << max_hits << "\n";
-    }
-    std::cout << "Prepare params " << t_prepare_queries << " ms, build BVH "
-              << t_build_bvh << " ms, forward " << t_forward_trace
-              << " ms, backward " << t_backward_trace << " ms\n";
-    //    sw.start();
-    //    thrust::sort(thrust::cuda::par.on(cuda_stream), result.data(),
-    //                 result.data() + result.size(cuda_stream));
-    //    auto end = thrust::unique(thrust::cuda::par.on(cuda_stream),
-    //    result.data(),
-    //                              result.data() + result.size(cuda_stream));
-    //    result.set_size(end - result.data());
-    //    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
-    //    sw.stop();
-    //    std::cout << "sort time " << sw.ms() << std::endl;
   }
 
  private:
@@ -741,14 +390,6 @@ class SpatialIndex {
   // for queries, updated for every batch of queries
   device_uvector<OptixAabb> aabbs_queries_;
   thrust::device_vector<unsigned char> gas_buf_queries_;
-  thrust::device_vector<uint32_t> n_hits;
-
-  // backward
-  pinned_vector<size_t> h_backward_prefix_sum_;
-  thrust::device_vector<size_t> d_backward_prefix_sum_;
-  pinned_vector<OptixTraversableHandle> h_backward_gas_handles_;
-  thrust::device_vector<OptixTraversableHandle> d_backward_gas_handles_;
-  std::vector<thrust::device_vector<unsigned char>> backward_gas_buf_;
 };
 
 }  // namespace rtspatial

@@ -59,29 +59,10 @@ RTConfig get_default_rt_config(const std::string& exec_root) {
   {
     Module mod;
 
-    mod.set_id(ModuleIdentifier::MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D);
-    mod.set_program_name(exec_root +
-                         "/ptx/float_shaders_intersects_envelope_query_2d.ptx");
-    mod.set_function_suffix("intersects_envelope_query_2d");
-    mod.set_launch_params_name("params");
-    mod.EnableIsIntersection();
-    mod.set_n_payload(1);
-
-    config.AddModule(mod);
-
-    mod.set_id(ModuleIdentifier::MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D);
-    mod.set_program_name(
-        exec_root + "/ptx/double_shaders_intersects_envelope_query_2d.ptx");
-    config.AddModule(mod);
-  }
-
-  {
-    Module mod;
-
     mod.set_id(
         ModuleIdentifier::MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD);
-    mod.set_program_name(
-        exec_root + "/ptx/float_shaders_intersects_envelope_query_2d_new.ptx");
+    mod.set_program_name(exec_root +
+                         "/ptx/float_shaders_intersects_envelope_query_2d.ptx");
     mod.set_function_suffix("intersects_envelope_query_2d_forward");
     mod.set_launch_params_name("params");
     mod.EnableIsIntersection();
@@ -92,62 +73,20 @@ RTConfig get_default_rt_config(const std::string& exec_root) {
     mod.set_id(ModuleIdentifier::
                    MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD);
     mod.set_program_name(
-        exec_root + "/ptx/double_shaders_intersects_envelope_query_2d_new.ptx");
+        exec_root + "/ptx/double_shaders_intersects_envelope_query_2d.ptx");
     config.AddModule(mod);
 
     mod.set_id(ModuleIdentifier::
                    MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD);
-    mod.set_program_name(
-        exec_root + "/ptx/float_shaders_intersects_envelope_query_2d_new.ptx");
+    mod.set_program_name(exec_root +
+                         "/ptx/float_shaders_intersects_envelope_query_2d.ptx");
     mod.set_function_suffix("intersects_envelope_query_2d_backward");
     config.AddModule(mod);
 
     mod.set_id(ModuleIdentifier::
                    MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD);
     mod.set_program_name(
-        exec_root + "/ptx/double_shaders_intersects_envelope_query_2d_new.ptx");
-    config.AddModule(mod);
-  }
-
-  {
-    Module mod;
-
-    mod.set_id(
-        ModuleIdentifier::
-            MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_FORWARD);
-    mod.set_program_name(
-        exec_root +
-        "/ptx/float_shaders_intersects_envelope_query_2d_pipeline.ptx");
-    mod.set_function_suffix("intersects_envelope_query_2d_forward");
-    mod.set_launch_params_name("params");
-    mod.EnableIsIntersection();
-    mod.set_n_payload(2);
-
-    config.AddModule(mod);
-
-    mod.set_id(
-        ModuleIdentifier::
-            MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_FORWARD);
-    mod.set_program_name(
-        exec_root +
-        "/ptx/double_shaders_intersects_envelope_query_2d_pipeline.ptx");
-    config.AddModule(mod);
-
-    mod.set_id(
-        ModuleIdentifier::
-            MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_BACKWARD);
-    mod.set_program_name(
-        exec_root +
-        "/ptx/float_shaders_intersects_envelope_query_2d_pipeline.ptx");
-    mod.set_function_suffix("intersects_envelope_query_2d_backward");
-    config.AddModule(mod);
-
-    mod.set_id(
-        ModuleIdentifier::
-            MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_PIPELINE_BACKWARD);
-    mod.set_program_name(
-        exec_root +
-        "/ptx/double_shaders_intersects_envelope_query_2d_pipeline.ptx");
+        exec_root + "/ptx/double_shaders_intersects_envelope_query_2d.ptx");
     config.AddModule(mod);
   }
 
@@ -503,7 +442,8 @@ OptixTraversableHandle RTEngine::buildAccel(
   CUdeviceptr d_aabb = THRUST_TO_CUPTR(aabbs.data());
   // Setup AABB build input. Don't disable AH.
   // OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT
-  uint32_t build_input_flags[1] = {OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL};
+  uint32_t build_input_flags[1] = {
+      OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL};
   uint32_t num_prims = aabbs.size();
 
   assert(reinterpret_cast<uint64_t>(aabbs.data()) %

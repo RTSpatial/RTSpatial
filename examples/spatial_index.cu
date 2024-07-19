@@ -64,15 +64,7 @@ int main(int argc, char* argv[]) {
     } else if (predicate == "intersects") {
       index.IntersectsWhatQuery(
           ArrayView<Envelope<Point<coord_t, 2>>>(d_queries), results,
-          stream.cuda_stream());
-    } else if (predicate == "intersects1") {
-      index.IntersectsWhatQueryLB(
-          ArrayView<Envelope<Point<coord_t, 2>>>(d_queries), results,
-          FLAGS_parallelism, stream.cuda_stream());
-    } else if (predicate == "intersects2") {
-      index.IntersectsWhatQueryPipeline(
-          ArrayView<Envelope<Point<coord_t, 2>>>(d_queries), results,
-          FLAGS_parallelism, stream.cuda_stream());
+          stream.cuda_stream(), FLAGS_parallelism);
     } else {
       std::cout << "Unsupported predicate\n";
       abort();

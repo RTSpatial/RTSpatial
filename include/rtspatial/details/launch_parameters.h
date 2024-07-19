@@ -39,30 +39,10 @@ struct LaunchParamsIntersectsEnvelope {
   using ray_params_t = RayParams<COORD_T, N_DIMS>;
 
   ArrayView<size_t> prefix_sum;
-  ArrayView<envelope_t> envelopes;
-  ArrayView<envelope_t> queries;
-  ArrayView<OptixAabb> aabbs;
-  ArrayView<OptixAabb> aabbs_queries;
-  bool inverse;
-  dev::Queue<thrust::pair<size_t, size_t>> result;
-  OptixTraversableHandle handle;
-  uint32_t *n_hits;
-  ArrayView<OptixTraversableHandle> backward_handles;
-};
-
-
-template <typename COORD_T, int N_DIMS>
-struct LaunchParamsIntersectsEnvelopeNew {
-  using point_t = Point<COORD_T, N_DIMS>;
-  using envelope_t = Envelope<point_t>;
-  using ray_params_t = RayParams<COORD_T, N_DIMS>;
-
-  ArrayView<size_t> prefix_sum;
   ArrayView<envelope_t> geoms;
   ArrayView<envelope_t> queries;
   dev::Queue<thrust::pair<size_t, size_t>> result;
   OptixTraversableHandle handle;
-  uint32_t *n_hits;
 };
 }  // namespace details
 
