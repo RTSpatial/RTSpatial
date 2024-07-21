@@ -17,7 +17,7 @@ struct LaunchParamsContainsPoint {
   ArrayView<size_t> prefix_sum;
   ArrayView<point_t> queries;
   ArrayView<envelope_t> envelopes;
-  dev::Queue<thrust::pair<size_t, size_t>> result;
+  dev::Queue<thrust::pair<uint32_t, uint32_t>> result;
   OptixTraversableHandle handle;
 };
 
@@ -28,7 +28,7 @@ struct LaunchParamsContainsEnvelope {
   ArrayView<size_t> prefix_sum;
   ArrayView<envelope_t> queries;
   ArrayView<envelope_t> envelopes;
-  dev::Queue<thrust::pair<size_t, size_t>> result;
+  dev::Queue<thrust::pair<uint32_t, uint32_t>> result;
   OptixTraversableHandle handle;
 };
 
@@ -41,7 +41,7 @@ struct LaunchParamsIntersectsEnvelope {
   ArrayView<size_t> prefix_sum;
   ArrayView<envelope_t> geoms;
   ArrayView<envelope_t> queries;
-  dev::Queue<thrust::pair<size_t, size_t>> result;
+  dev::Queue<thrust::pair<uint32_t, uint32_t>> result;
   OptixTraversableHandle handle;
 };
 }  // namespace details

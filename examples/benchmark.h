@@ -359,7 +359,7 @@ pinned_vector<thrust::pair<size_t, size_t>> RunRTSpatialIntersectsEnvelopeQuery(
     const std::vector<Envelope<Point<COORD_T, 2>>>& envelopes,
     const std::vector<Envelope<Point<COORD_T, 2>>>& queries) {
   SpatialIndex<COORD_T, 2, true> index;
-  Queue<thrust::pair<size_t, size_t>> results;
+  Queue<thrust::pair<uint32_t, uint32_t>> results;
   thrust::device_vector<Envelope<Point<COORD_T, 2>>> d_envelopes(envelopes);
   thrust::device_vector<Envelope<Point<COORD_T, 2>>> d_queries(queries);
   pinned_vector<thrust::pair<size_t, size_t>> xsects;
@@ -475,7 +475,7 @@ void BoxContainsPointQueries(
     const std::vector<Envelope<Point<COORD_T, 2>>>& boxes,
     const std::vector<Point<COORD_T, 2>>& point_queries) {
   SpatialIndex<COORD_T, 2, true> index;
-  Queue<thrust::pair<size_t, size_t>> results;
+  Queue<thrust::pair<uint32_t, uint32_t>> results;
   thrust::device_vector<Envelope<Point<COORD_T, 2>>> d_boxes(boxes);
   thrust::device_vector<Point<COORD_T, 2>> d_point_queries(point_queries);
   Stream stream;

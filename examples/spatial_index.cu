@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
 
   SpatialIndex<coord_t, 2, false> index;
   Config config;
-  Queue<thrust::pair<size_t, size_t>> results;
+  Queue<thrust::pair<uint32_t, uint32_t>> results;
   Stream stream;
   Stopwatch sw;
 

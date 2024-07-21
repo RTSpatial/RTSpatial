@@ -31,11 +31,10 @@ template <typename COORD_T, int N_DIMS, bool USE_TRIANGLE = false>
 class SpatialIndex {
   static_assert(std::is_floating_point<COORD_T>::value,
                 "Unsupported COORD_T type");
-
  public:
   using point_t = Point<COORD_T, N_DIMS>;
   using envelope_t = Envelope<point_t>;
-  using result_queue_t = Queue<thrust::pair<size_t, size_t>>;
+  using result_queue_t = Queue<thrust::pair<uint32_t, uint32_t>>;
 
   void Init(const Config& config) {
     config_ = config;

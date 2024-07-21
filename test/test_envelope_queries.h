@@ -13,7 +13,7 @@ TEST(EnvelopeQueries, fp32_intersects_envelope) {
   spatial_index_f2d_t index;
   pinned_vector<envelope_f2d_t> envelopes;
   pinned_vector<envelope_f2d_t> query_envelopes;
-  Queue<thrust::pair<size_t, size_t>> result;
+  Queue<thrust::pair<uint32_t, uint32_t>> result;
 
   envelopes.push_back(envelope_f2d_t(point_f2d_t(0, 0), point_f2d_t(1, 1)));
 
@@ -46,7 +46,7 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_big) {
       GenerateUniformBoxes<float>(n2, 0.1, 0.1);
 
   spatial_index_f2d_t index;
-  Queue<thrust::pair<size_t, size_t>> result;
+  Queue<thrust::pair<uint32_t, uint32_t>> result;
   Stream stream;
 
   result.Init(n1 * n2 * 0.1);
@@ -70,7 +70,7 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_big_enable_triangle) {
       GenerateUniformBoxes<float>(n2, 0.1, 0.1);
 
   SpatialIndex<float, 2, true> index;
-  Queue<thrust::pair<size_t, size_t>> result;
+  Queue<thrust::pair<uint32_t, uint32_t>> result;
   Stream stream;
 
   result.Init(n1 * n2 * 0.1);
@@ -94,7 +94,7 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch) {
       GenerateUniformBoxes<float>(n2, 0.1, 0.1);
 
   spatial_index_f2d_t index;
-  Queue<thrust::pair<size_t, size_t>> result;
+  Queue<thrust::pair<uint32_t, uint32_t>> result;
   Stream stream;
 
   result.Init(n1 * n2 * 0.1);
@@ -130,7 +130,7 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch_update) {
       GenerateUniformBoxes<float>(n2, 0.1, 0.1);
 
   spatial_index_f2d_t index;
-  Queue<thrust::pair<size_t, size_t>> result;
+  Queue<thrust::pair<uint32_t, uint32_t>> result;
   Stream stream;
   Config config;
 

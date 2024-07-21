@@ -7,7 +7,7 @@
 namespace rtspatial {
 TEST(PointQueries, fp32_contains_point_triangle_large) {
   SpatialIndex<float, 2, true> index;
-  Queue<thrust::pair<size_t, size_t>> result;
+  Queue<thrust::pair<uint32_t, uint32_t>> result;
   size_t n1 = 100000, n2 = 1000;
 
   thrust::device_vector<envelope_f2d_t> envelopes =
@@ -30,7 +30,7 @@ TEST(PointQueries, fp32_contains_point_triangle_large) {
 
 TEST(PointQueries, fp32_contains_point_triangle_large_batch) {
   SpatialIndex<float, 2, true> index;
-  Queue<thrust::pair<size_t, size_t>> result;
+  Queue<thrust::pair<uint32_t, uint32_t>> result;
   size_t n1 = 100000, n2 = 1000;
 
   thrust::device_vector<envelope_f2d_t> envelopes =
@@ -63,7 +63,7 @@ TEST(PointQueries, fp32_contains_point_triangle_large_batch) {
 
 TEST(PointQueries, fp32_contains_point_large) {
   SpatialIndex<float, 2, false> index;
-  Queue<thrust::pair<size_t, size_t>> result;
+  Queue<thrust::pair<uint32_t, uint32_t>> result;
   size_t n1 = 100000, n2 = 1000;
 
   thrust::device_vector<envelope_f2d_t> envelopes =
@@ -85,7 +85,7 @@ TEST(PointQueries, fp32_contains_point_large) {
 
 TEST(PointQueries, fp32_contains_point_large_batch) {
   SpatialIndex<float, 2, false> index;
-  Queue<thrust::pair<size_t, size_t>> result;
+  Queue<thrust::pair<uint32_t, uint32_t>> result;
   size_t n1 = 100000, n2 = 1000;
 
   thrust::device_vector<envelope_f2d_t> envelopes =
@@ -120,7 +120,7 @@ TEST(PointQueries, fp32_contains_point_triangle) {
   SpatialIndex<float, 2, true> index;
   pinned_vector<envelope_f2d_t> envelopes;
   pinned_vector<point_f2d_t> points;
-  Queue<thrust::pair<size_t, size_t>> result;
+  Queue<thrust::pair<uint32_t, uint32_t>> result;
 
   envelopes.push_back(envelope_f2d_t(point_f2d_t(0, 0), point_f2d_t(1, 1)));
 
@@ -151,7 +151,7 @@ TEST(PointQueries, fp32_contains_point) {
   spatial_index_f2d_t index;
   pinned_vector<envelope_f2d_t> envelopes;
   pinned_vector<point_f2d_t> points;
-  Queue<thrust::pair<size_t, size_t>> result;
+  Queue<thrust::pair<uint32_t, uint32_t>> result;
 
   envelopes.push_back(envelope_f2d_t(point_f2d_t(0, 0), point_f2d_t(1, 1)));
 
@@ -182,7 +182,7 @@ TEST(PointQueries, fp64_contains_point) {
   spatial_index_d2d_t index;
   pinned_vector<envelope_d2d_t> envelopes;
   pinned_vector<point_d2d_t> points;
-  Queue<thrust::pair<size_t, size_t>> result;
+  Queue<thrust::pair<uint32_t, uint32_t>> result;
 
   envelopes.push_back(envelope_d2d_t(point_d2d_t(0, 0), point_d2d_t(1, 1)));
 
