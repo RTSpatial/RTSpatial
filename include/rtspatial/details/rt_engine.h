@@ -196,6 +196,7 @@ class RTEngine {
       cudaStream_t cuda_stream, std::vector<OptixTraversableHandle>& handles,
       ReusableBuffer& buf, bool prefer_fast_build = false) {
     tmp_h_instances_.resize(handles.size());
+    tmp_instances_.resize(handles.size());
 
     for (size_t i = 0; i < handles.size(); i++) {
       tmp_h_instances_[i].instanceId = i;
@@ -206,7 +207,10 @@ class RTEngine {
       tmp_h_instances_[i].visibilityMask = 255;
       tmp_h_instances_[i].flags = OPTIX_INSTANCE_FLAG_NONE;
     }
-    tmp_instances_ = tmp_h_instances_;
+
+    thrust::copy(thrust::cuda::par.on(cuda_stream), tmp_h_instances_.begin(),
+                 tmp_h_instances_.end(), tmp_instances_.begin());
+
     return buildInstanceAccel(cuda_stream,
                               ArrayView<OptixInstance>(tmp_instances_), buf,
                               prefer_fast_build);
@@ -216,6 +220,7 @@ class RTEngine {
       cudaStream_t cuda_stream, std::vector<OptixTraversableHandle>& handles,
       ReusableBuffer& buf, size_t buf_offset, bool prefer_fast_build = false) {
     tmp_h_instances_.resize(handles.size());
+    tmp_instances_.resize(handles.size());
 
     for (size_t i = 0; i < handles.size(); i++) {
       tmp_h_instances_[i].instanceId = i;
@@ -226,7 +231,9 @@ class RTEngine {
       tmp_h_instances_[i].visibilityMask = 255;
       tmp_h_instances_[i].flags = OPTIX_INSTANCE_FLAG_NONE;
     }
-    tmp_instances_ = tmp_h_instances_;
+    thrust::copy(thrust::cuda::par.on(cuda_stream), tmp_h_instances_.begin(),
+                 tmp_h_instances_.end(), tmp_instances_.begin());
+
     return updateInstanceAccel(cuda_stream,
                                ArrayView<OptixInstance>(tmp_instances_), buf,
                                buf_offset, prefer_fast_build);
