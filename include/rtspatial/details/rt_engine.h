@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "rtspatial/details/launch_parameters.h"
+#include "rtspatial/details/reusable_buffer.h"
 #include "rtspatial/details/sbt_record.h"
 #include "rtspatial/utils/array_view.h"
 #include "rtspatial/utils/shared_value.h"
@@ -137,7 +138,7 @@ struct RTConfig {
   size_t temp_buf_size;
 };
 
-RTConfig get_default_rt_config(const std::string& exec_root);
+RTConfig get_default_rt_config(const std::string& ptx_root);
 
 class RTEngine {
  public:
@@ -155,35 +156,45 @@ class RTEngine {
     buildSBT(config);
   }
 
-  OptixTraversableHandle BuildAccelCustom(
-      cudaStream_t cuda_stream, ArrayView<OptixAabb> aabbs,
-      thrust::device_vector<unsigned char>& output_buf,
-      bool prefer_fast_build = false) {
-    return buildAccel(cuda_stream, aabbs, output_buf, prefer_fast_build);
+  OptixTraversableHandle BuildAccelCustom(cudaStream_t cuda_stream,
+                                          ArrayView<OptixAabb> aabbs,
+                                          ReusableBuffer& buf,
+                                          bool prefer_fast_build = false) {
+    return buildAccel(cuda_stream, aabbs, buf, prefer_fast_build);
   }
 
-  OptixTraversableHandle UpdateAccelCustom(
-      cudaStream_t cuda_stream, OptixTraversableHandle handle,
-      ArrayView<OptixAabb> aabbs,
-      thrust::device_vector<unsigned char>& output_buf,
-      bool prefer_fast_build = false) {
-    return updateAccel(cuda_stream, handle, aabbs, output_buf,
+  OptixTraversableHandle UpdateAccelCustom(cudaStream_t cuda_stream,
+                                           OptixTraversableHandle handle,
+                                           ArrayView<OptixAabb> aabbs,
+                                           ReusableBuffer& buf,
+                                           size_t buf_offset,
+                                           bool prefer_fast_build = false) {
+    return updateAccel(cuda_stream, handle, aabbs, buf, buf_offset,
                        prefer_fast_build);
   }
 
-  OptixTraversableHandle BuildAccelTriangle(
-      cudaStream_t cuda_stream, ArrayView<float3> vertices,
-      ArrayView<uint3> indices,
-      thrust::device_vector<unsigned char>& output_buf,
-      bool prefer_fast_build = false) {
-    return buildAccelTriangle(cuda_stream, vertices, indices, output_buf,
+  OptixTraversableHandle BuildAccelTriangle(cudaStream_t cuda_stream,
+                                            ArrayView<float3> vertices,
+                                            ArrayView<uint3> indices,
+                                            ReusableBuffer& buf,
+                                            bool prefer_fast_build = false) {
+    return buildAccelTriangle(cuda_stream, vertices, indices, buf,
                               prefer_fast_build);
+  }
+
+  OptixTraversableHandle UpdateAccelTriangle(cudaStream_t cuda_stream,
+                                             ArrayView<float3> vertices,
+                                             ArrayView<uint3> indices,
+                                             ReusableBuffer& buf,
+                                             size_t buf_offset,
+                                             bool prefer_fast_build = false) {
+    return updateAccelTriangle(cuda_stream, vertices, indices, buf, buf_offset,
+                               prefer_fast_build);
   }
 
   OptixTraversableHandle BuildInstanceAccel(
       cudaStream_t cuda_stream, std::vector<OptixTraversableHandle>& handles,
-      thrust::device_vector<unsigned char>& output_buf,
-      bool prefer_fast_build = false) {
+      ReusableBuffer& buf, bool prefer_fast_build = false) {
     tmp_h_instances_.resize(handles.size());
 
     for (size_t i = 0; i < handles.size(); i++) {
@@ -197,14 +208,13 @@ class RTEngine {
     }
     tmp_instances_ = tmp_h_instances_;
     return buildInstanceAccel(cuda_stream,
-                              ArrayView<OptixInstance>(tmp_instances_),
-                              output_buf, prefer_fast_build);
+                              ArrayView<OptixInstance>(tmp_instances_), buf,
+                              prefer_fast_build);
   }
 
   OptixTraversableHandle UpdateInstanceAccel(
       cudaStream_t cuda_stream, std::vector<OptixTraversableHandle>& handles,
-      thrust::device_vector<unsigned char>& output_buf,
-      bool prefer_fast_build = false) {
+      ReusableBuffer& buf, size_t buf_offset, bool prefer_fast_build = false) {
     tmp_h_instances_.resize(handles.size());
 
     for (size_t i = 0; i < handles.size(); i++) {
@@ -218,8 +228,8 @@ class RTEngine {
     }
     tmp_instances_ = tmp_h_instances_;
     return updateInstanceAccel(cuda_stream,
-                               ArrayView<OptixInstance>(tmp_instances_),
-                               output_buf, prefer_fast_build);
+                               ArrayView<OptixInstance>(tmp_instances_), buf,
+                               buf_offset, prefer_fast_build);
   }
 
   void Render(cudaStream_t cuda_stream, ModuleIdentifier mod, dim3 dim);
@@ -241,6 +251,10 @@ class RTEngine {
 
   OptixDeviceContext get_context() const { return optix_context_; }
 
+  size_t EstimateMemoryUsageForAABB(size_t num_aabbs);
+
+  size_t EstimateMemoryUsageForTriangle(size_t num_aabbs);
+
  private:
   void initOptix(const RTConfig& config);
 
@@ -260,27 +274,49 @@ class RTEngine {
 
   void buildSBT(const RTConfig& config);
 
-  OptixTraversableHandle buildAccel(
-      cudaStream_t cuda_stream, ArrayView<OptixAabb> aabbs,
-      thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
+  OptixTraversableHandle buildAccel(cudaStream_t cuda_stream,
+                                    ArrayView<OptixAabb> aabbs,
+                                    ReusableBuffer& buf,
+                                    bool prefer_fast_build);
 
-  OptixTraversableHandle updateAccel(
-      cudaStream_t cuda_stream, OptixTraversableHandle handle,
-      ArrayView<OptixAabb> aabbs,
-      thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
+  OptixTraversableHandle updateAccel(cudaStream_t cuda_stream,
+                                     OptixTraversableHandle handle,
+                                     ArrayView<OptixAabb> aabbs,
+                                     ReusableBuffer& buf, size_t buf_offset,
+                                     bool prefer_fast_build);
 
-  OptixTraversableHandle buildAccelTriangle(
-      cudaStream_t cuda_stream, ArrayView<float3> vertices,
-      ArrayView<uint3> indices,
-      thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
+  OptixTraversableHandle buildAccelTriangle(cudaStream_t cuda_stream,
+                                            ArrayView<float3> vertices,
+                                            ArrayView<uint3> indices,
+                                            ReusableBuffer& buf,
+                                            bool prefer_fast_build);
 
-  OptixTraversableHandle buildInstanceAccel(
-      cudaStream_t cuda_stream, ArrayView<OptixInstance> instances,
-      thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
+  OptixTraversableHandle updateAccelTriangle(cudaStream_t cuda_stream,
+                                             ArrayView<float3> vertices,
+                                             ArrayView<uint3> indices,
+                                             ReusableBuffer& buf,
+                                             size_t buf_offset,
+                                             bool prefer_fast_build);
 
-  OptixTraversableHandle updateInstanceAccel(
-      cudaStream_t cuda_stream, ArrayView<OptixInstance> instances,
-      thrust::device_vector<unsigned char>& output_buf, bool prefer_fast_build);
+  OptixTraversableHandle buildInstanceAccel(cudaStream_t cuda_stream,
+                                            ArrayView<OptixInstance> instances,
+                                            ReusableBuffer& buf,
+                                            bool prefer_fast_build);
+
+  OptixTraversableHandle updateInstanceAccel(cudaStream_t cuda_stream,
+                                             ArrayView<OptixInstance> instances,
+                                             ReusableBuffer& buf,
+                                             size_t buf_offset,
+                                             bool prefer_fast_build);
+
+  static size_t getAccelAlignedSize(size_t size) {
+    if (size % OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT == 0) {
+      return size;
+    }
+
+    return size - size % OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT +
+           OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT;
+  }
 
   std::vector<char> readData(const std::string& filename) {
     std::ifstream inputData(filename, std::ios::binary);
@@ -326,7 +362,6 @@ class RTEngine {
   uint32_t params_size_;
 
   // device data
-  thrust::device_vector<unsigned char> temp_buf_;
   pinned_vector<OptixInstance> tmp_h_instances_;
   thrust::device_vector<OptixInstance> tmp_instances_;
 

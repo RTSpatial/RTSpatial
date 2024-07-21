@@ -36,11 +36,13 @@ int main(int argc, char* argv[]) {
   std::cout << "Loaded boxes " << boxes.size() << std::endl;
 
   SpatialIndex<coord_t, 2, false> index;
+  Config config;
   Queue<thrust::pair<size_t, size_t>> results;
   Stream stream;
   Stopwatch sw;
 
-  index.Init(exec_root);
+  config.ptx_root = exec_root + "/ptx";
+  index.Init(config);
 
   sw.start();
   index.Insert(d_boxes, stream.cuda_stream());

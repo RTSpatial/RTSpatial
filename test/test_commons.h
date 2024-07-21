@@ -5,7 +5,7 @@
 
 #include "rtspatial/spatial_index.cuh"
 
-std::string exec_root;
+std::string ptx_root;
 
 namespace rtspatial {
 using spatial_index_f2d_t = SpatialIndex<float, 2>;

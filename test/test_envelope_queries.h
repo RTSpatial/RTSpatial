@@ -8,7 +8,7 @@
 #include "rtspatial/utils/stream.h"
 #include "test_commons.h"
 namespace rtspatial {
-#if 1
+
 TEST(EnvelopeQueries, fp32_intersects_envelope) {
   spatial_index_f2d_t index;
   pinned_vector<envelope_f2d_t> envelopes;
@@ -25,8 +25,10 @@ TEST(EnvelopeQueries, fp32_intersects_envelope) {
 
   result.Init(1000);
   Stream stream;
+  Config config;
+  config.ptx_root = ptx_root;
 
-  index.Init(exec_root);
+  index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
   index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(query_envelopes), result,
                             stream.cuda_stream());
@@ -34,7 +36,6 @@ TEST(EnvelopeQueries, fp32_intersects_envelope) {
   std::cout << "Intersects " << n_res << std::endl;
   ASSERT_EQ(n_res, 2);
 }
-
 TEST(EnvelopeQueries, fp32_intersects_envelope_big) {
   size_t n1 = 100000, n2 = 1000;
   thrust::device_vector<envelope_f2d_t> envelopes =
@@ -48,7 +49,10 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_big) {
   Stream stream;
 
   result.Init(n1 * n2 * 0.1);
-  index.Init(exec_root);
+  Config config;
+
+  config.ptx_root = ptx_root;
+  index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
   index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), result,
                             stream.cuda_stream());
@@ -69,7 +73,10 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch) {
   Stream stream;
 
   result.Init(n1 * n2 * 0.1);
-  index.Init(exec_root);
+  Config config;
+
+  config.ptx_root = ptx_root;
+  index.Init(config);
   int n_batches = 10;
   int avg_size = (envelopes.size() + n_batches - 1) / n_batches;
 
@@ -87,7 +94,7 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch) {
   uint32_t n_res = result.size(stream.cuda_stream());
   ASSERT_EQ(n_res, 6549771);
 }
-#endif
+
 
 TEST(EnvelopeQueries, fp32_intersects_envelope_batch_update) {
   size_t n1 = 100000, n2 = 1000;
@@ -101,9 +108,12 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch_update) {
   spatial_index_f2d_t index;
   Queue<thrust::pair<size_t, size_t>> result;
   Stream stream;
+  Config config;
+
+  config.ptx_root = ptx_root;
 
   result.Init(n1 * n2 * 0.1);
-  index.Init(exec_root);
+  index.Init(config);
   int n_batches = 10;
   int avg_size = (envelopes.size() + n_batches - 1) / n_batches;
 
@@ -139,7 +149,7 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch_update) {
     for (auto& update : updates) {
       tmp_envelopes[update.first] = update.second;
     }
-    tmp_index.Init(exec_root);
+    tmp_index.Init(config);
     tmp_index.Insert(ArrayView<envelope_f2d_t>(tmp_envelopes),
                      stream.cuda_stream());
     tmp_index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), result,
@@ -157,6 +167,7 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch_update) {
   uint32_t n_res = result.size(stream.cuda_stream());
   ASSERT_EQ(n_res, answer);
 }
+
 }  // namespace rtspatial
 
 #endif  // RTSPATIAL_TESTS_TEST_ENVELOPE_QUERIES_H

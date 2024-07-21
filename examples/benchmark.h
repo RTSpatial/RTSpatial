@@ -231,7 +231,6 @@ std::vector<thrust::pair<size_t, size_t>> RunRTreeIntersectsEnvelopeQuery(
   return xsects;
 }
 
-
 template <typename COORD_T>
 std::vector<thrust::pair<size_t, size_t>> RunRTreeContainsPointQuery(
     const std::vector<Envelope<Point<COORD_T, 2>>>& envelopes,
@@ -367,7 +366,9 @@ pinned_vector<thrust::pair<size_t, size_t>> RunRTSpatialIntersectsEnvelopeQuery(
   Stream stream;
   Stopwatch sw;
 
-  index.Init(root_exec);
+  Config config;
+  config.ptx_root = root_exec + "/ptx";
+  index.Init(config);
   results.Init(
       std::max(1000u, (uint32_t) (envelopes.size() * queries.size() * 0.01)));
 
@@ -479,8 +480,10 @@ void BoxContainsPointQueries(
   thrust::device_vector<Point<COORD_T, 2>> d_point_queries(point_queries);
   Stream stream;
   Stopwatch sw;
+  Config config;
 
-  index.Init(exec_root);
+  config.ptx_root = exec_root + "/ptx";
+  index.Init(config);
   results.Init(std::max(
       1000u, (uint32_t) (d_boxes.size() * d_point_queries.size() * 0.01)));
 

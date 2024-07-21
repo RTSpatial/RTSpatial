@@ -5,7 +5,6 @@
 #include "rtspatial/utils/stream.h"
 #include "test_commons.h"
 namespace rtspatial {
-#if 1
 TEST(PointQueries, fp32_contains_point_triangle_large) {
   SpatialIndex<float, 2, true> index;
   Queue<thrust::pair<size_t, size_t>> result;
@@ -17,8 +16,11 @@ TEST(PointQueries, fp32_contains_point_triangle_large) {
 
   result.Init(n1 * n2 * 0.1);
   Stream stream;
+  Config config;
 
-  index.Init(exec_root);
+  config.ptx_root = ptx_root;
+
+  index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
   index.ContainsWhatQuery(ArrayView<point_f2d_t>(queries), result,
                           stream.cuda_stream());
@@ -37,8 +39,10 @@ TEST(PointQueries, fp32_contains_point_triangle_large_batch) {
 
   result.Init(n1 * n2 * 0.1);
   Stream stream;
+  Config config;
 
-  index.Init(exec_root);
+  config.ptx_root = ptx_root;
+  index.Init(config);
   int n_batches = 10;
   int avg_size = (envelopes.size() + n_batches - 1) / n_batches;
 
@@ -68,8 +72,10 @@ TEST(PointQueries, fp32_contains_point_large) {
 
   result.Init(n1 * n2 * 0.1);
   Stream stream;
+  Config config;
 
-  index.Init(exec_root);
+  config.ptx_root = ptx_root;
+  index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
   index.ContainsWhatQuery(ArrayView<point_f2d_t>(queries), result,
                           stream.cuda_stream());
@@ -88,8 +94,10 @@ TEST(PointQueries, fp32_contains_point_large_batch) {
 
   result.Init(n1 * n2 * 0.1);
   Stream stream;
+  Config config;
 
-  index.Init(exec_root);
+  config.ptx_root = ptx_root;
+  index.Init(config);
   int n_batches = 10;
   int avg_size = (envelopes.size() + n_batches - 1) / n_batches;
 
@@ -128,8 +136,10 @@ TEST(PointQueries, fp32_contains_point_triangle) {
 
   result.Init(1000);
   Stream stream;
+  Config config;
 
-  index.Init(exec_root);
+  config.ptx_root = ptx_root;
+  index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
   index.ContainsWhatQuery(ArrayView<point_f2d_t>(points), result,
                           stream.cuda_stream());
@@ -157,8 +167,10 @@ TEST(PointQueries, fp32_contains_point) {
 
   result.Init(1000);
   Stream stream;
+  Config config;
 
-  index.Init(exec_root);
+  config.ptx_root = ptx_root;
+  index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
   index.ContainsWhatQuery(ArrayView<point_f2d_t>(points), result,
                           stream.cuda_stream());
@@ -186,14 +198,15 @@ TEST(PointQueries, fp64_contains_point) {
 
   result.Init(1000);
   Stream stream;
+  Config config;
 
-  index.Init(exec_root);
+  config.ptx_root = ptx_root;
+  index.Init(config);
   index.Insert(ArrayView<envelope_d2d_t>(envelopes), stream.cuda_stream());
   index.ContainsWhatQuery(ArrayView<point_d2d_t>(points), result,
                           stream.cuda_stream());
   uint32_t n_res = result.size(stream.cuda_stream());
   ASSERT_EQ(n_res, 5);
 }
-#endif
 }  // namespace rtspatial
 #endif  // RTSPATIAL_TESTS_TEST_POINT_QUERIES_H
