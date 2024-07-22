@@ -38,6 +38,7 @@ enum ModuleIdentifier {
   MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD,
   MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD,
   MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD,
+  MODULE_ID_EXTERNAL,
   NUM_MODULE_IDENTIFIERS
 };
 static const float IDENTICAL_TRANSFORMATION_MTX[12] = {
@@ -45,7 +46,8 @@ static const float IDENTICAL_TRANSFORMATION_MTX[12] = {
 
 class Module {
  public:
-  Module() : enabled_module_(0), n_payload_(0), n_attribute_(0) {}
+  Module()
+      : enabled_module_(0), n_payload_(0), n_attribute_(0) {}
 
   explicit Module(ModuleIdentifier id)
       : id_(id), enabled_module_(0), n_payload_(0), n_attribute_(0) {}
@@ -70,23 +72,15 @@ class Module {
 
   void set_id(ModuleIdentifier id) { id_ = id; }
 
-  void set_program_name(const std::string& program_name) {
-    program_name_ = program_name;
+  void set_program_path(const std::string& program_path) {
+    program_path_ = program_path;
   }
-  const std::string& get_program_name() const { return program_name_; }
+  const std::string& get_program_path() const { return program_path_; }
 
   void set_function_suffix(const std::string& function_suffix) {
     function_suffix_ = function_suffix;
   }
   const std::string& get_function_suffix() const { return function_suffix_; }
-
-  void set_launch_params_name(const std::string& launch_params_name) {
-    launch_params_name_ = launch_params_name;
-  }
-
-  const std::string& get_launch_params_name() const {
-    return launch_params_name_;
-  }
 
   void set_n_payload(int n_payload) { n_payload_ = n_payload; }
 
@@ -100,9 +94,8 @@ class Module {
 
  private:
   ModuleIdentifier id_;
-  std::string program_name_;
+  std::string program_path_;
   std::string function_suffix_;
-  std::string launch_params_name_;
   int enabled_module_;
 
   int n_payload_;
@@ -117,15 +110,24 @@ struct RTConfig {
         logCallbackLevel(1),
         opt_level(OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         dbg_level(OPTIX_COMPILE_DEBUG_LEVEL_NONE),
-        temp_buf_size(100 * 1024 * 1024) {}
+        temp_buf_size(100 * 1024 * 1024),
+        n_pipelines(1) {}
 
   void AddModule(const Module& mod) {
-    if (access(mod.get_program_name().c_str(), R_OK) != 0) {
-      std::cerr << "Error: cannot open " << mod.get_program_name() << std::endl;
+    if (access(mod.get_program_path().c_str(), R_OK) != 0) {
+      std::cerr << "Error: cannot open " << mod.get_program_path() << std::endl;
       abort();
     }
 
     modules[mod.get_id()] = mod;
+  }
+
+  void SetExternalModule(const Module& mod) {
+    if (access(mod.get_program_path().c_str(), R_OK) != 0) {
+      std::cerr << "Error: cannot open " << mod.get_program_path() << std::endl;
+      abort();
+    }
+    external_module = mod;
   }
 
   int max_reg_count;
@@ -135,7 +137,9 @@ struct RTConfig {
   OptixCompileOptimizationLevel opt_level;
   OptixCompileDebugLevel dbg_level;
   std::map<ModuleIdentifier, Module> modules;
+  Module external_module;
   size_t temp_buf_size;
+  int n_pipelines;
 };
 
 RTConfig get_default_rt_config(const std::string& ptx_root);
@@ -148,7 +152,7 @@ class RTEngine {
     initOptix(config);
     createContext();
     createModule(config);
-    createExternalPrograms();
+    createExternalPrograms(config);
     createRaygenPrograms(config);
     createMissPrograms(config);
     createHitgroupPrograms(config);
@@ -269,7 +273,7 @@ class RTEngine {
 
   void createModule(const RTConfig& config);
 
-  void createExternalPrograms();
+  void createExternalPrograms(const RTConfig& config);
 
   void createRaygenPrograms(const RTConfig& config);
 
@@ -355,13 +359,14 @@ class RTEngine {
   std::vector<OptixPipelineCompileOptions> pipeline_compile_options_;
   OptixPipelineLinkOptions pipeline_link_options_ = {};
 
-  std::vector<OptixProgramGroup> external_pgs_;
-
   std::vector<OptixProgramGroup> raygen_pgs_;
   std::vector<thrust::device_vector<RaygenRecord>> raygen_records_;
 
   std::vector<OptixProgramGroup> miss_pgs_;
   std::vector<thrust::device_vector<MissRecord>> miss_records_;
+
+  OptixProgramGroup external_pg_;
+  std::vector<thrust::device_vector<CallableRecord>> callable_records_;
 
   std::vector<OptixProgramGroup> hitgroup_pgs_;
   std::vector<thrust::device_vector<HitgroupRecord>> hitgroup_records_;

@@ -1,4 +1,3 @@
-
 #ifndef RTSPATIAL_DETAILS_LAUNCH_PARAMETERS_H
 #define RTSPATIAL_DETAILS_LAUNCH_PARAMETERS_H
 #include "rtspatial/details/ray_params.h"
@@ -7,6 +6,8 @@
 #include "rtspatial/utils/array_view.h"
 #include "rtspatial/utils/queue.h"
 #include "rtspatial/utils/type_traits.h"
+#define RTSPATIAL_OPTIX_LAUNCH_PARAMS_NAME "params"
+
 namespace rtspatial {
 
 namespace details {
@@ -43,6 +44,7 @@ struct LaunchParamsIntersectsEnvelope {
   ArrayView<envelope_t> queries;
   dev::Queue<thrust::pair<uint32_t, uint32_t>> result;
   OptixTraversableHandle handle;
+  void *arg;
 };
 }  // namespace details
 

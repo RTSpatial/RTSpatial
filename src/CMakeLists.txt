@@ -15,7 +15,6 @@ set(SHADERS
 
 #set(SHADERS_HEADERS "${PROJECT_SOURCE_DIR}/include/details/launch_parameters.h")
 
-message("MODULE_TARGET_DIR: ${MODULE_TARGET_DIR}")
 
 set(ALL_PROGRAM_MODULES "")
 set(FLOAT_TYPES "float;double")
@@ -38,9 +37,6 @@ foreach (FLOAT_TYPE IN LISTS FLOAT_TYPES)
     )
     list(APPEND ALL_PROGRAM_MODULES ${PROGRAM_MODULES})
 endforeach ()
-
-message("All modules ${ALL_PROGRAM_MODULES}")
-
 
 set(RTSPATIAL_HDR_DIR "${PROJECT_SOURCE_DIR}/include/rtspatial/")
 set(RTPSATIAL_SRC_DIR "${PROJECT_SOURCE_DIR}/src")
@@ -94,12 +90,14 @@ install(DIRECTORY ${RTSPATIAL_HDR_DIR}
         FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.cuh")
 
 # Ptx
-install(DIRECTORY "${MODULE_TARGET_DIR}/ptx"
+install(DIRECTORY "${PROJECT_BINARY_DIR}/ptx"
+        DESTINATION "${RTSPATIAL_LIB_DIR}")
+
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/src/shaders"
         DESTINATION "${RTSPATIAL_LIB_DIR}")
 
 install(FILES "${PROJECT_SOURCE_DIR}/cmake/FindOptiX.cmake"
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/rtspatial")
-
 
 install(TARGETS rtspatial
         EXPORT rtspatial-targets
@@ -117,7 +115,7 @@ write_basic_package_version_file(
         VERSION ${RTSPATIAL_VERSION}
         COMPATIBILITY AnyNewerVersion)
 
-set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR}/rtspatial CACHE PATH "Location of header files")
+set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location of header files")
 set(LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR} CACHE PATH "Location of library files")
 
 configure_package_config_file("${PROJECT_SOURCE_DIR}/rtspatial-config.in.cmake"
@@ -127,6 +125,11 @@ configure_package_config_file("${PROJECT_SOURCE_DIR}/rtspatial-config.in.cmake"
 
 install(FILES "${PROJECT_BINARY_DIR}/rtspatial-config.cmake" "${CMAKE_CURRENT_BINARY_DIR}/rtspatial-config-version.cmake"
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/rtspatial")
+
+
+install(FILES "${PROJECT_SOURCE_DIR}/cmake/nvcuda_compile_module.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/rtspatial")
+
 
 target_include_directories(rtspatial
         INTERFACE

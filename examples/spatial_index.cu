@@ -42,6 +42,9 @@ int main(int argc, char* argv[]) {
   Stopwatch sw;
 
   config.ptx_root = exec_root + "/ptx";
+  config.hit_program_name = "shaders_hit";
+  config.hit_func_suffix = "rtspatial_hit";
+
   index.Init(config);
 
   sw.start();
@@ -50,6 +53,7 @@ int main(int argc, char* argv[]) {
   sw.stop();
   double t_load = sw.ms(), t_query;
   size_t n_results;
+  thrust::device_vector<dev::Queue<thrust::pair<uint32_t, uint32_t>>> d_results;
 
   if (!box_query_path.empty()) {
     thrust::device_vector<Envelope<Point<coord_t, 2>>> d_queries =

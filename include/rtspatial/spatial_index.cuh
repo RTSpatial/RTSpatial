@@ -24,6 +24,8 @@ struct Config {
   bool preallocate = false;
   bool prefer_fast_build_geom = false;
   bool prefer_fast_build_query = true;
+  std::string hit_program_name;
+  std::string hit_func_suffix;
 };
 
 // Ref: https://arc2r.github.io/book/Spatial_Predicates.html
@@ -31,6 +33,7 @@ template <typename COORD_T, int N_DIMS, bool USE_TRIANGLE = false>
 class SpatialIndex {
   static_assert(std::is_floating_point<COORD_T>::value,
                 "Unsupported COORD_T type");
+
  public:
   using point_t = Point<COORD_T, N_DIMS>;
   using envelope_t = Envelope<point_t>;
@@ -40,6 +43,15 @@ class SpatialIndex {
     config_ = config;
     details::RTConfig rt_config =
         details::get_default_rt_config(config.ptx_root);
+
+    details::Module mod;
+
+    mod.set_id(details::ModuleIdentifier::MODULE_ID_EXTERNAL);
+    mod.set_program_path(config.ptx_root + "/" + config.hit_program_name +
+                         ".ptx");
+    mod.set_function_suffix(config.hit_func_suffix);
+
+    rt_config.SetExternalModule(mod);
 
     rt_engine_.Init(rt_config);
     ev_pool_.CacheEvents(500);

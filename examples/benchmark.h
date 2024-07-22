@@ -380,8 +380,8 @@ pinned_vector<thrust::pair<size_t, size_t>> RunRTSpatialIntersectsEnvelopeQuery(
   double t_load = sw.ms();
 
   sw.start();
-  index.IntersectsWhatQuery(ArrayView<Envelope<Point<COORD_T, 2>>>(d_queries),
-                            results, stream.cuda_stream());
+//  index.IntersectsWhatQuery(ArrayView<Envelope<Point<COORD_T, 2>>>(d_queries),
+//                            results, stream.cuda_stream());
   size_t n_results = results.size(stream.cuda_stream());
   sw.stop();
   double t_query = sw.ms();

@@ -3,7 +3,6 @@
 #include <optix.h>
 #include <optix_device.h>
 
-#include "rtspatial/details/config.h"
 #include "rtspatial/details/launch_parameters.h"
 
 enum { SURFACE_RAY_TYPE = 0, RAY_TYPE_COUNT };
@@ -20,8 +19,8 @@ __intersection__intersects_envelope_query_2d_forward() {
   // This filter is not necessary anymore
   //      if (envelope.Intersects(query)) ...
   auto inst_id = optixGetInstanceId();
-  auto envelope_id = params.prefix_sum[inst_id] + primitive_idx;
-  const auto& envelope = params.geoms[envelope_id];
+  auto geom_id = params.prefix_sum[inst_id] + primitive_idx;
+  const auto& envelope = params.geoms[geom_id];
   const auto& query = params.queries[query_id];
 
   rtspatial::details::RayParams<FLOAT_TYPE, 2> ray_params;
@@ -31,7 +30,9 @@ __intersection__intersects_envelope_query_2d_forward() {
   bool query_hit = ray_params.IsHit(envelope);
 
   if (query_hit) {
-    params.result.Append(thrust::make_pair(envelope_id, query_id));
+//    optixDirectCall<void, uint32_t, uint32_t, void*>(0, geom_id, query_id,
+//                                                     params.arg);
+        params.result.Append(thrust::make_pair(geom_id, query_id));
   }
 }
 
@@ -91,6 +92,8 @@ __intersection__intersects_envelope_query_2d_backward() {
 
       if (!box_hit) {
         params.result.Append(thrust::make_pair(geom_id, query_id));
+//        optixDirectCall<void, uint32_t, uint32_t, void*>(0, geom_id, query_id,
+//                                                         params.arg);
       }
     }
   }

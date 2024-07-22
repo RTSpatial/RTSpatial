@@ -22,17 +22,16 @@ RTConfig get_default_rt_config(const std::string& ptx_root) {
     Module mod;
 
     mod.set_id(ModuleIdentifier::MODULE_ID_FLOAT_CONTAINS_POINT_QUERY_2D);
-    mod.set_program_name(ptx_root +
+    mod.set_program_path(ptx_root +
                          "/float_shaders_contains_point_query_2d.ptx");
     mod.set_function_suffix("contains_point_query_2d");
-    mod.set_launch_params_name("params");
     mod.EnableIsIntersection();
     mod.set_n_payload(1);
 
     config.AddModule(mod);
 
     mod.set_id(ModuleIdentifier::MODULE_ID_DOUBLE_CONTAINS_POINT_QUERY_2D);
-    mod.set_program_name(ptx_root +
+    mod.set_program_path(ptx_root +
                          "/double_shaders_contains_point_query_2d.ptx");
     config.AddModule(mod);
   }
@@ -41,17 +40,16 @@ RTConfig get_default_rt_config(const std::string& ptx_root) {
     Module mod;
 
     mod.set_id(ModuleIdentifier::MODULE_ID_FLOAT_CONTAINS_ENVELOPE_QUERY_2D);
-    mod.set_program_name(ptx_root +
+    mod.set_program_path(ptx_root +
                          "/float_shaders_contains_envelope_query_2d.ptx");
     mod.set_function_suffix("contains_envelope_query_2d");
-    mod.set_launch_params_name("params");
     mod.EnableIsIntersection();
     mod.set_n_payload(1);
 
     config.AddModule(mod);
 
     mod.set_id(ModuleIdentifier::MODULE_ID_DOUBLE_CONTAINS_ENVELOPE_QUERY_2D);
-    mod.set_program_name(ptx_root +
+    mod.set_program_path(ptx_root +
                          "/double_shaders_contains_envelope_query_2d.ptx");
     config.AddModule(mod);
   }
@@ -61,10 +59,9 @@ RTConfig get_default_rt_config(const std::string& ptx_root) {
 
     mod.set_id(
         ModuleIdentifier::MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD);
-    mod.set_program_name(ptx_root +
+    mod.set_program_path(ptx_root +
                          "/float_shaders_intersects_envelope_query_2d.ptx");
     mod.set_function_suffix("intersects_envelope_query_2d_forward");
-    mod.set_launch_params_name("params");
     mod.EnableIsIntersection();
     mod.set_n_payload(2);
 
@@ -72,20 +69,20 @@ RTConfig get_default_rt_config(const std::string& ptx_root) {
 
     mod.set_id(ModuleIdentifier::
                    MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD);
-    mod.set_program_name(ptx_root +
+    mod.set_program_path(ptx_root +
                          "/double_shaders_intersects_envelope_query_2d.ptx");
     config.AddModule(mod);
 
     mod.set_id(ModuleIdentifier::
                    MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD);
-    mod.set_program_name(ptx_root +
+    mod.set_program_path(ptx_root +
                          "/float_shaders_intersects_envelope_query_2d.ptx");
     mod.set_function_suffix("intersects_envelope_query_2d_backward");
     config.AddModule(mod);
 
     mod.set_id(ModuleIdentifier::
                    MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD);
-    mod.set_program_name(ptx_root +
+    mod.set_program_path(ptx_root +
                          "/double_shaders_intersects_envelope_query_2d.ptx");
     config.AddModule(mod);
   }
@@ -95,10 +92,9 @@ RTConfig get_default_rt_config(const std::string& ptx_root) {
 
     mod.set_id(
         ModuleIdentifier::MODULE_ID_FLOAT_CONTAINS_POINT_QUERY_2D_TRIANGLE);
-    mod.set_program_name(ptx_root +
+    mod.set_program_path(ptx_root +
                          "/float_shaders_contains_point_query_2d_triangle.ptx");
     mod.set_function_suffix("contains_point_query_2d_triangle");
-    mod.set_launch_params_name("params");
     mod.EnableAnyHit();
     mod.set_n_payload(1);
 
@@ -106,7 +102,7 @@ RTConfig get_default_rt_config(const std::string& ptx_root) {
 
     mod.set_id(
         ModuleIdentifier::MODULE_ID_DOUBLE_CONTAINS_POINT_QUERY_2D_TRIANGLE);
-    mod.set_program_name(
+    mod.set_program_path(
         ptx_root + "/double_shaders_contains_point_query_2d_triangle.ptx");
     config.AddModule(mod);
   }
@@ -169,12 +165,10 @@ void RTEngine::createModule(const RTConfig& config) {
 
   pipeline_link_options_.maxTraceDepth = config.max_trace_depth;
 
-  auto& conf_modules = config.modules;
-
   modules_.resize(ModuleIdentifier::NUM_MODULE_IDENTIFIERS);
 
-  for (auto& pair : conf_modules) {
-    std::vector<char> programData = readData(pair.second.get_program_name());
+  for (auto& pair : config.modules) {
+    std::vector<char> programData = readData(pair.second.get_program_path());
     auto& pipeline_compile_options = pipeline_compile_options_[pair.first];
 
     //    pipeline_compile_options.traversableGraphFlags =
@@ -187,7 +181,7 @@ void RTEngine::createModule(const RTConfig& config) {
     pipeline_compile_options.numAttributeValues = pair.second.get_n_attribute();
     pipeline_compile_options.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
     pipeline_compile_options.pipelineLaunchParamsVariableName =
-        pair.second.get_launch_params_name().c_str();
+        RTSPATIAL_OPTIX_LAUNCH_PARAMS_NAME;
     //    pipeline_compile_options.usesPrimitiveTypeFlags =
     //        OPTIX_PRIMITIVE_TYPE_CUSTOM | OPTIX_PRIMITIVE_TYPE_SPHERE;
 
@@ -203,29 +197,59 @@ void RTEngine::createModule(const RTConfig& config) {
     }
 #endif
   }
+
+  // External Module
+  std::vector<char> programData =
+      readData(config.external_module.get_program_path());
+  auto& pipeline_compile_options =
+      pipeline_compile_options_[ModuleIdentifier::MODULE_ID_EXTERNAL];
+
+  //    pipeline_compile_options.traversableGraphFlags =
+  //        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
+  pipeline_compile_options.traversableGraphFlags =
+      OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+
+  pipeline_compile_options.usesMotionBlur = false;
+  pipeline_compile_options.numPayloadValues = 0;
+  pipeline_compile_options.numAttributeValues = 0;
+  pipeline_compile_options.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+  pipeline_compile_options.pipelineLaunchParamsVariableName =
+      RTSPATIAL_OPTIX_LAUNCH_PARAMS_NAME;
+
+  char log[2048];
+  size_t sizeof_log = sizeof(log);
+  OPTIX_CHECK(optixModuleCreate(
+      optix_context_, &module_compile_options_, &pipeline_compile_options,
+      programData.data(), programData.size(), log, &sizeof_log,
+      &modules_[ModuleIdentifier::MODULE_ID_EXTERNAL]));
+#ifndef NDEBUG
+  if (sizeof_log > 1) {
+    std::cout << log << std::endl;
+  }
+#endif
 }
 
-void RTEngine::createExternalPrograms() {
-  //  external_pgs_.resize(1);
-  //
-  //  OptixProgramGroupDesc pgd;
-  //  OptixProgramGroupOptions pgOptions = {};
-  //
-  //  pgd.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-  //  pgd.flags = OPTIX_PROGRAM_GROUP_FLAGS_NONE;
-  //  pgd.callables.moduleDC = modules_[MODULE_ID_EXTERNAL];
-  //  pgd.callables.entryFunctionNameDC = "__direct_callable__dummy_func";
-  //  pgd.callables.moduleCC = nullptr;
-  //  pgd.callables.entryFunctionNameCC = nullptr;
-  //
-  //  char log[2048];
-  //  size_t sizeof_log = sizeof(log);
-  //  OPTIX_CHECK(optixProgramGroupCreate(optix_context_, &pgd, 1, &pgOptions,
-  //  log,
-  //                                      &sizeof_log, &external_pgs_[0]));
-  //  if (sizeof_log > 1) {
-  //    std::cout << log << std::endl;
-  //  }
+void RTEngine::createExternalPrograms(const RTConfig& config) {
+  OptixProgramGroupDesc pgd;
+  OptixProgramGroupOptions pgOptions = {};
+
+  auto func_name = std::string("__direct_callable__" +
+                               config.external_module.get_function_suffix());
+
+  pgd.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+  pgd.flags = OPTIX_PROGRAM_GROUP_FLAGS_NONE;
+  pgd.callables.moduleDC = modules_[ModuleIdentifier::MODULE_ID_EXTERNAL];
+  pgd.callables.entryFunctionNameDC = func_name.c_str();
+  pgd.callables.moduleCC = nullptr;
+  pgd.callables.entryFunctionNameCC = nullptr;
+
+  char log[2048];
+  size_t sizeof_log = sizeof(log);
+  OPTIX_CHECK(optixProgramGroupCreate(optix_context_, &pgd, 1, &pgOptions, log,
+                                      &sizeof_log, &external_pg_));
+  if (sizeof_log > 1) {
+    std::cout << log << std::endl;
+  }
 }
 
 void RTEngine::createRaygenPrograms(const RTConfig& config) {
@@ -346,6 +370,7 @@ void RTEngine::createPipeline(const RTConfig& config) {
     program_groups.push_back(raygen_pgs_[pair.first]);
     program_groups.push_back(miss_pgs_[pair.first]);
     program_groups.push_back(hitgroup_pgs_[pair.first]);
+    program_groups.push_back(external_pg_);
 
     char log[2048];
     size_t sizeof_log = sizeof(log);
@@ -389,6 +414,7 @@ void RTEngine::buildSBT(const RTConfig& config) {
   raygen_records_.resize(ModuleIdentifier::NUM_MODULE_IDENTIFIERS);
   miss_records_.resize(ModuleIdentifier::NUM_MODULE_IDENTIFIERS);
   hitgroup_records_.resize(ModuleIdentifier::NUM_MODULE_IDENTIFIERS);
+  callable_records_.resize(ModuleIdentifier::NUM_MODULE_IDENTIFIERS);
 
   for (auto& pair : config.modules) {
     auto& sbt = sbts_[pair.first];
@@ -416,6 +442,7 @@ void RTEngine::buildSBT(const RTConfig& config) {
         thrust::raw_pointer_cast(miss_records_[pair.first].data()));
     sbt.missRecordStrideInBytes = sizeof(MissRecord);
     sbt.missRecordCount = (int) missRecords.size();
+    sbt.callablesRecordBase = 0;
 
     std::vector<HitgroupRecord> hitgroupRecords;
     {
@@ -429,6 +456,19 @@ void RTEngine::buildSBT(const RTConfig& config) {
         thrust::raw_pointer_cast(hitgroup_records_[pair.first].data()));
     sbt.hitgroupRecordStrideInBytes = sizeof(HitgroupRecord);
     sbt.hitgroupRecordCount = (int) hitgroupRecords.size();
+
+    std::vector<CallableRecord> callableRecords;
+    {
+      CallableRecord rec;
+      OPTIX_CHECK(optixSbtRecordPackHeader(external_pg_, &rec));
+      rec.data = nullptr;
+      callableRecords.push_back(rec);
+    }
+    callable_records_[pair.first] = callableRecords;
+    sbt.callablesRecordBase = reinterpret_cast<CUdeviceptr>(
+        thrust::raw_pointer_cast(callable_records_[pair.first].data()));
+    sbt.callablesRecordStrideInBytes = sizeof(CallableRecord);
+    sbt.callablesRecordCount = (int) callableRecords.size();
   }
 }
 

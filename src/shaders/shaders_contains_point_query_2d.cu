@@ -11,6 +11,13 @@ extern "C" __constant__
     rtspatial::details::LaunchParamsContainsPoint<FLOAT_TYPE, 2>
         params;
 
+
+extern "C" __device__ void __direct_callable__rtspatial_hit(uint32_t geom_id,
+                                                            uint32_t query_id,
+                                                            void *arg) {
+
+}
+
 extern "C" __global__ void __intersection__contains_point_query_2d() {
   auto primitive_idx = optixGetPrimitiveIndex();
   auto inst_id = optixGetInstanceId();

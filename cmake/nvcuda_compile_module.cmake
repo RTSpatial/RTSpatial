@@ -28,8 +28,6 @@ FUNCTION(NVCUDA_COMPILE_MODULE)
         FILE(MAKE_DIRECTORY ${NVCUDA_COMPILE_MODULE_TARGET_PATH})
     endif ()
 
-    message("Prefix: ${NVCUDA_COMPILE_MODULE_PREFIX}")
-
     # Custom build rule to generate either *.ptx or *.optixir files from *.cu files.
     FOREACH (input ${NVCUDA_COMPILE_MODULE_SOURCES})
         get_filename_component(input_we "${input}" NAME_WE)
@@ -58,6 +56,5 @@ FUNCTION(NVCUDA_COMPILE_MODULE)
                 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         )
     ENDFOREACH ()
-    message("${OUTPUT_FILES}")
     set(${NVCUDA_COMPILE_MODULE_GENERATED_FILES} ${OUTPUT_FILES} PARENT_SCOPE)
 ENDFUNCTION()
