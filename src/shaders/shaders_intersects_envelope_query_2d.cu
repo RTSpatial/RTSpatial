@@ -31,7 +31,7 @@ __intersection__intersects_envelope_query_2d_forward() {
   bool query_hit = ray_params.IsHit(envelope);
 
   if (query_hit) {
-    params.result.AppendWarp(thrust::make_pair(envelope_id, query_id));
+    params.result.Append(thrust::make_pair(envelope_id, query_id));
   }
 }
 
@@ -90,7 +90,7 @@ __intersection__intersects_envelope_query_2d_backward() {
       bool box_hit = ray_params.IsHit(envelope);
 
       if (!box_hit) {
-        params.result.AppendWarp(thrust::make_pair(geom_id, query_id));
+        params.result.Append(thrust::make_pair(geom_id, query_id));
       }
     }
   }
