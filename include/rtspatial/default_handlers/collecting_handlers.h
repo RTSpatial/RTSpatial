@@ -6,25 +6,23 @@
 #include <cstdint>
 
 #include "rtspatial/utils/queue.h"
-extern "C" __device__ void rtspatial_handle_point_contains(uint32_t geom_id,
-                                                           uint32_t query_id,
-                                                           void* arg) {
+extern "C" __forceinline__ __device__ void rtspatial_handle_point_contains(
+    uint32_t geom_id, uint32_t query_id, void* arg) {
   auto* queue =
       static_cast<rtspatial::dev::Queue<thrust::pair<uint32_t, uint32_t>>*>(
           arg);
   queue->Append(thrust::make_pair(geom_id, query_id));
 }
 
-extern "C" __device__ void rtspatial_handle_envelope_contains(uint32_t geom_id,
-                                                              uint32_t query_id,
-                                                              void* arg) {
+extern "C" __forceinline__ __device__ void rtspatial_handle_envelope_contains(
+    uint32_t geom_id, uint32_t query_id, void* arg) {
   auto* queue =
       static_cast<rtspatial::dev::Queue<thrust::pair<uint32_t, uint32_t>>*>(
           arg);
   queue->Append(thrust::make_pair(geom_id, query_id));
 }
 
-extern "C" __device__ void rtspatial_handle_envelope_intersects(
+extern "C" __forceinline__ __device__ void rtspatial_handle_envelope_intersects(
     uint32_t geom_id, uint32_t query_id, void* arg) {
   auto* queue =
       static_cast<rtspatial::dev::Queue<thrust::pair<uint32_t, uint32_t>>*>(
