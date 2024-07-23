@@ -34,8 +34,6 @@ install(DIRECTORY ${RTSPATIAL_HDR_DIR}
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/src/shaders"
         DESTINATION "${RTSPATIAL_LIB_DIR}")
 
-install(FILES "${PROJECT_SOURCE_DIR}/cmake/FindOptiX.cmake"
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/rtspatial")
 
 install(TARGETS rtspatial
         EXPORT rtspatial-targets
@@ -65,7 +63,9 @@ install(FILES "${PROJECT_BINARY_DIR}/rtspatial-config.cmake" "${CMAKE_CURRENT_BI
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/rtspatial")
 
 
-install(FILES "${PROJECT_SOURCE_DIR}/cmake/nvcuda_compile_module.cmake"
+install(FILES "${PROJECT_SOURCE_DIR}/cmake/FindOptiX.cmake"
+        "${PROJECT_SOURCE_DIR}/cmake/nvcuda_compile_module.cmake"
+        "${PROJECT_SOURCE_DIR}/cmake/rtspatial_compile_shaders.cmake"
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/rtspatial")
 
 
