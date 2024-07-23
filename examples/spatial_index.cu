@@ -1,8 +1,114 @@
+#include <boost/geometry.hpp>
+
 #include "flags.h"
 #include "rtspatial/spatial_index.cuh"
 #include "rtspatial/utils/stream.h"
 
-namespace rtspatial {}
+namespace rtspatial {
+template <typename COORD_T>
+std::vector<Envelope<Point<COORD_T, 2>>> LoadBoxes(
+    const std::string& path, int limit = std::numeric_limits<int>::max()) {
+  std::ifstream ifs(path);
+  std::string line;
+  using point_type = boost::geometry::model::d2::point_xy<COORD_T>;
+  using polygon_type = boost::geometry::model::polygon<point_type>;
+  using region_t = Envelope<Point<COORD_T, 2>>;
+  std::vector<region_t> regions;
+
+  while (std::getline(ifs, line)) {
+    if (!line.empty()) {
+      std::vector<point_type> points;
+
+      if (line.rfind("MULTIPOLYGON", 0) == 0) {
+        boost::geometry::model::multi_polygon<polygon_type> c;
+        boost::geometry::read_wkt(line, c);
+
+        for (auto& poly : c) {
+          for (auto& p : poly.outer()) {
+            points.push_back(p);
+          }
+        }
+      } else if (line.rfind("POLYGON", 0) == 0) {
+        boost::geometry::model::polygon<point_type> c;
+        boost::geometry::read_wkt(line, c);
+
+        for (auto& p : c.outer()) {
+          points.push_back(p);
+        }
+      } else {
+        std::cerr << "Bad Geometry " << line << "\n";
+        abort();
+      }
+
+      COORD_T lows[2] = {std::numeric_limits<COORD_T>::max(),
+                         std::numeric_limits<COORD_T>::max()};
+      COORD_T highs[2] = {std::numeric_limits<COORD_T>::lowest(),
+                          std::numeric_limits<COORD_T>::lowest()};
+
+      for (auto& p : points) {
+        lows[0] = std::min(lows[0], p.x());
+        highs[0] = std::max(highs[0], p.x());
+        lows[1] = std::min(lows[1], p.y());
+        highs[1] = std::max(highs[1], p.y());
+      }
+
+      region_t region(Point<COORD_T, 2>(lows[0], lows[1]),
+                      Point<COORD_T, 2>(highs[0], highs[1]));
+      regions.push_back(region);
+      if (regions.size() >= limit) {
+        break;
+      }
+    }
+  }
+  ifs.close();
+  return regions;
+}
+
+template <typename COORD_T>
+std::vector<Point<COORD_T, 2>> LoadPoints(
+    const std::string& path, int limit = std::numeric_limits<int>::max()) {
+  std::ifstream ifs(path);
+  std::string line;
+  using point_type = boost::geometry::model::d2::point_xy<COORD_T>;
+  using polygon_type = boost::geometry::model::polygon<point_type>;
+  std::vector<Point<COORD_T, 2>> points;
+
+  while (std::getline(ifs, line)) {
+    if (!line.empty()) {
+      if (line.rfind("MULTIPOLYGON", 0) == 0) {
+        boost::geometry::model::multi_polygon<polygon_type> c;
+        boost::geometry::read_wkt(line, c);
+
+        for (auto& poly : c) {
+          for (auto& p : poly.outer()) {
+            points.push_back(Point<COORD_T, 2>(p.x(), p.y()));
+          }
+        }
+      } else if (line.rfind("POLYGON", 0) == 0) {
+        boost::geometry::model::polygon<point_type> c;
+        boost::geometry::read_wkt(line, c);
+
+        for (auto& p : c.outer()) {
+          points.push_back(Point<COORD_T, 2>(p.x(), p.y()));
+        }
+      } else if (line.rfind("POINT", 0) == 0) {
+        point_type c;
+        boost::geometry::read_wkt(line, c);
+
+        points.push_back(Point<COORD_T, 2>(c.x(), c.y()));
+      } else {
+        std::cerr << "Bad Geometry " << line << "\n";
+        abort();
+      }
+      if (points.size() >= limit) {
+        break;
+      }
+    }
+  }
+  ifs.close();
+  return points;
+}
+}  // namespace rtspatial
 
 int main(int argc, char* argv[]) {
   //  FLAGS_stderrthreshold = 0;
@@ -94,10 +200,8 @@ int main(int argc, char* argv[]) {
     n_results = results.size(stream.cuda_stream());
     sw.stop();
     t_query = sw.ms();
-
-    auto rtree_results = RunRTreeContainsPointQuery<coord_t>(boxes, queries);
-    std::cout << "rtree_results " << rtree_results.size() << "\n";
   }
   std::cout << "RT, load " << t_load << " ms, query " << t_query
             << " ms, results: " << n_results << std::endl;
+  return 0;
 }
