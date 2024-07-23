@@ -1,4 +1,3 @@
-#include "benchmark.h"
 #include "flags.h"
 #include "rtspatial/spatial_index.cuh"
 #include "rtspatial/utils/stream.h"
