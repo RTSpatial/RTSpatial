@@ -65,7 +65,6 @@ install(FILES "${PROJECT_BINARY_DIR}/rtspatial-config.cmake" "${CMAKE_CURRENT_BI
 
 install(FILES "${PROJECT_SOURCE_DIR}/cmake/FindOptiX.cmake"
         "${PROJECT_SOURCE_DIR}/cmake/nvcuda_compile_module.cmake"
-        "${PROJECT_SOURCE_DIR}/cmake/rtspatial_compile_shaders.cmake"
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/rtspatial")
 
 
