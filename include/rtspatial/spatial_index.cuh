@@ -24,8 +24,6 @@ struct Config {
   bool preallocate = false;
   bool prefer_fast_build_geom = false;
   bool prefer_fast_build_query = true;
-  std::string hit_program_name;
-  std::string hit_func_suffix;
 };
 
 // Ref: https://arc2r.github.io/book/Spatial_Predicates.html
@@ -43,15 +41,6 @@ class SpatialIndex {
     config_ = config;
     details::RTConfig rt_config =
         details::get_default_rt_config(config.ptx_root);
-
-    details::Module mod;
-
-    mod.set_id(details::ModuleIdentifier::MODULE_ID_EXTERNAL);
-    mod.set_program_path(config.ptx_root + "/" + config.hit_program_name +
-                         ".ptx");
-    mod.set_function_suffix(config.hit_func_suffix);
-
-    rt_config.SetExternalModule(mod);
 
     rt_engine_.Init(rt_config);
     ev_pool_.CacheEvents(500);
@@ -314,7 +303,7 @@ class SpatialIndex {
     }
   }
 
-  void ContainsWhatQuery(ArrayView<point_t> queries, result_queue_t& result,
+  void ContainsWhatQuery(ArrayView<point_t> queries, void* arg,
                          cudaStream_t cuda_stream = nullptr) {
     if (queries.empty() || envelopes_.empty()) {
       return;
@@ -324,7 +313,7 @@ class SpatialIndex {
     params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
     params.queries = queries;
     params.envelopes = ArrayView<envelope_t>(envelopes_);
-    params.result = result.DeviceObject();
+    params.arg = arg;
     if (USE_TRIANGLE) {
       params.handle = ias_handle_tri_;
     } else {
@@ -361,7 +350,7 @@ class SpatialIndex {
     rt_engine_.Render(cuda_stream, id, dims);
   }
 
-  void ContainsWhatQuery(ArrayView<envelope_t> queries, result_queue_t& result,
+  void ContainsWhatQuery(ArrayView<envelope_t> queries, void* arg,
                          cudaStream_t cuda_stream = nullptr) {
     if (queries.empty() || envelopes_.empty()) {
       return;
@@ -371,7 +360,7 @@ class SpatialIndex {
     params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
     params.queries = queries;
     params.envelopes = ArrayView<envelope_t>(envelopes_);
-    params.result = result.DeviceObject();
+    params.arg = arg;
     params.handle = ias_handle_;
 
     rt_engine_.CopyLaunchParams(cuda_stream, params);
@@ -393,8 +382,7 @@ class SpatialIndex {
     rt_engine_.Render(cuda_stream, id, dims);
   }
 
-  void IntersectsWhatQuery(const ArrayView<envelope_t> queries,
-                           result_queue_t& result,
+  void IntersectsWhatQuery(const ArrayView<envelope_t> queries, void* arg,
                            cudaStream_t cuda_stream = nullptr,
                            int parallelism = 500) {
     if (queries.empty() || envelopes_.empty()) {
@@ -408,7 +396,7 @@ class SpatialIndex {
     params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
     params.geoms = ArrayView<envelope_t>(envelopes_);
     params.queries = queries;
-    params.result = result.DeviceObject();
+    params.arg = arg;
     params.handle = ias_handle_;
 
     details::ModuleIdentifier id;

@@ -4,12 +4,14 @@
 #include <optix_device.h>
 
 #include "rtspatial/details/launch_parameters.h"
+//#include "rtspatial_handlers.h"
 
 enum { SURFACE_RAY_TYPE = 0, RAY_TYPE_COUNT };
 // FLOAT_TYPE is defined by CMakeLists.txt
 extern "C" __constant__
     rtspatial::details::LaunchParamsIntersectsEnvelope<FLOAT_TYPE, 2>
         params;
+
 
 extern "C" __global__ void
 __intersection__intersects_envelope_query_2d_forward() {
@@ -30,9 +32,7 @@ __intersection__intersects_envelope_query_2d_forward() {
   bool query_hit = ray_params.IsHit(envelope);
 
   if (query_hit) {
-//    optixDirectCall<void, uint32_t, uint32_t, void*>(0, geom_id, query_id,
-//                                                     params.arg);
-        params.result.Append(thrust::make_pair(geom_id, query_id));
+    rtspatial_handle_envelope_intersects(geom_id, query_id, params.arg);
   }
 }
 
@@ -91,9 +91,7 @@ __intersection__intersects_envelope_query_2d_backward() {
       bool box_hit = ray_params.IsHit(envelope);
 
       if (!box_hit) {
-        params.result.Append(thrust::make_pair(geom_id, query_id));
-//        optixDirectCall<void, uint32_t, uint32_t, void*>(0, geom_id, query_id,
-//                                                         params.arg);
+        rtspatial_handle_envelope_intersects(geom_id, query_id, params.arg);
       }
     }
   }

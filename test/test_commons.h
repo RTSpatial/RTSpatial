@@ -17,6 +17,8 @@ using envelope_f2d_t = spatial_index_f2d_t::envelope_t;
 using point_d2d_t = spatial_index_d2d_t::point_t;
 using envelope_d2d_t = spatial_index_d2d_t::envelope_t;
 
+SharedValue<unsigned long long int> counter;
+
 template <typename COORD_T>
 std::vector<Envelope<Point<COORD_T, 2>>> GenerateUniformBoxes(
     size_t n, COORD_T max_width, COORD_T max_height) {

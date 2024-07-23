@@ -41,9 +41,7 @@ int main(int argc, char* argv[]) {
   Stream stream;
   Stopwatch sw;
 
-  config.ptx_root = exec_root + "/ptx";
-  config.hit_program_name = "shaders_hit";
-  config.hit_func_suffix = "rtspatial_hit";
+  config.ptx_root = PTX_ROOT;
 
   index.Init(config);
 
@@ -62,15 +60,17 @@ int main(int argc, char* argv[]) {
 
     results.Init(std::max(1000u, (uint32_t) (boxes.size() * d_queries.size() *
                                              FLAGS_load_factor)));
-
+    d_results.push_back(results.DeviceObject());
     sw.start();
     if (predicate == "contains") {
       index.ContainsWhatQuery(ArrayView<Envelope<Point<coord_t, 2>>>(d_queries),
-                              results, stream.cuda_stream());
+                              thrust::raw_pointer_cast(d_results.data()),
+                              stream.cuda_stream());
     } else if (predicate == "intersects") {
       index.IntersectsWhatQuery(
-          ArrayView<Envelope<Point<coord_t, 2>>>(d_queries), results,
-          stream.cuda_stream(), FLAGS_parallelism);
+          ArrayView<Envelope<Point<coord_t, 2>>>(d_queries),
+          thrust::raw_pointer_cast(d_results.data()), stream.cuda_stream(),
+          FLAGS_parallelism);
     } else {
       std::cout << "Unsupported predicate\n";
       abort();
@@ -86,9 +86,11 @@ int main(int argc, char* argv[]) {
 
     results.Init(std::max(1000u, (uint32_t) (boxes.size() * d_queries.size() *
                                              FLAGS_load_factor)));
+    d_results.push_back(results.DeviceObject());
 
     sw.start();
-    index.ContainsWhatQuery(ArrayView<Point<coord_t, 2>>(d_queries), results,
+    index.ContainsWhatQuery(ArrayView<Point<coord_t, 2>>(d_queries),
+                            thrust::raw_pointer_cast(d_results.data()),
                             stream.cuda_stream());
     n_results = results.size(stream.cuda_stream());
     sw.stop();

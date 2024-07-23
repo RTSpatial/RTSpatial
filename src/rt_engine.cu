@@ -197,59 +197,6 @@ void RTEngine::createModule(const RTConfig& config) {
     }
 #endif
   }
-
-  // External Module
-  std::vector<char> programData =
-      readData(config.external_module.get_program_path());
-  auto& pipeline_compile_options =
-      pipeline_compile_options_[ModuleIdentifier::MODULE_ID_EXTERNAL];
-
-  //    pipeline_compile_options.traversableGraphFlags =
-  //        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
-  pipeline_compile_options.traversableGraphFlags =
-      OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
-
-  pipeline_compile_options.usesMotionBlur = false;
-  pipeline_compile_options.numPayloadValues = 0;
-  pipeline_compile_options.numAttributeValues = 0;
-  pipeline_compile_options.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
-  pipeline_compile_options.pipelineLaunchParamsVariableName =
-      RTSPATIAL_OPTIX_LAUNCH_PARAMS_NAME;
-
-  char log[2048];
-  size_t sizeof_log = sizeof(log);
-  OPTIX_CHECK(optixModuleCreate(
-      optix_context_, &module_compile_options_, &pipeline_compile_options,
-      programData.data(), programData.size(), log, &sizeof_log,
-      &modules_[ModuleIdentifier::MODULE_ID_EXTERNAL]));
-#ifndef NDEBUG
-  if (sizeof_log > 1) {
-    std::cout << log << std::endl;
-  }
-#endif
-}
-
-void RTEngine::createExternalPrograms(const RTConfig& config) {
-  OptixProgramGroupDesc pgd;
-  OptixProgramGroupOptions pgOptions = {};
-
-  auto func_name = std::string("__direct_callable__" +
-                               config.external_module.get_function_suffix());
-
-  pgd.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-  pgd.flags = OPTIX_PROGRAM_GROUP_FLAGS_NONE;
-  pgd.callables.moduleDC = modules_[ModuleIdentifier::MODULE_ID_EXTERNAL];
-  pgd.callables.entryFunctionNameDC = func_name.c_str();
-  pgd.callables.moduleCC = nullptr;
-  pgd.callables.entryFunctionNameCC = nullptr;
-
-  char log[2048];
-  size_t sizeof_log = sizeof(log);
-  OPTIX_CHECK(optixProgramGroupCreate(optix_context_, &pgd, 1, &pgOptions, log,
-                                      &sizeof_log, &external_pg_));
-  if (sizeof_log > 1) {
-    std::cout << log << std::endl;
-  }
 }
 
 void RTEngine::createRaygenPrograms(const RTConfig& config) {
@@ -370,7 +317,6 @@ void RTEngine::createPipeline(const RTConfig& config) {
     program_groups.push_back(raygen_pgs_[pair.first]);
     program_groups.push_back(miss_pgs_[pair.first]);
     program_groups.push_back(hitgroup_pgs_[pair.first]);
-    program_groups.push_back(external_pg_);
 
     char log[2048];
     size_t sizeof_log = sizeof(log);
@@ -414,7 +360,6 @@ void RTEngine::buildSBT(const RTConfig& config) {
   raygen_records_.resize(ModuleIdentifier::NUM_MODULE_IDENTIFIERS);
   miss_records_.resize(ModuleIdentifier::NUM_MODULE_IDENTIFIERS);
   hitgroup_records_.resize(ModuleIdentifier::NUM_MODULE_IDENTIFIERS);
-  callable_records_.resize(ModuleIdentifier::NUM_MODULE_IDENTIFIERS);
 
   for (auto& pair : config.modules) {
     auto& sbt = sbts_[pair.first];
@@ -456,19 +401,6 @@ void RTEngine::buildSBT(const RTConfig& config) {
         thrust::raw_pointer_cast(hitgroup_records_[pair.first].data()));
     sbt.hitgroupRecordStrideInBytes = sizeof(HitgroupRecord);
     sbt.hitgroupRecordCount = (int) hitgroupRecords.size();
-
-    std::vector<CallableRecord> callableRecords;
-    {
-      CallableRecord rec;
-      OPTIX_CHECK(optixSbtRecordPackHeader(external_pg_, &rec));
-      rec.data = nullptr;
-      callableRecords.push_back(rec);
-    }
-    callable_records_[pair.first] = callableRecords;
-    sbt.callablesRecordBase = reinterpret_cast<CUdeviceptr>(
-        thrust::raw_pointer_cast(callable_records_[pair.first].data()));
-    sbt.callablesRecordStrideInBytes = sizeof(CallableRecord);
-    sbt.callablesRecordCount = (int) callableRecords.size();
   }
 }
 

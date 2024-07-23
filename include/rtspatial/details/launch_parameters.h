@@ -15,34 +15,34 @@ template <typename COORD_T, int N_DIMS>
 struct LaunchParamsContainsPoint {
   using point_t = Point<COORD_T, N_DIMS>;
   using envelope_t = Envelope<point_t>;
+
   ArrayView<size_t> prefix_sum;
   ArrayView<point_t> queries;
   ArrayView<envelope_t> envelopes;
-  dev::Queue<thrust::pair<uint32_t, uint32_t>> result;
   OptixTraversableHandle handle;
+  void *arg;
 };
 
 template <typename COORD_T, int N_DIMS>
 struct LaunchParamsContainsEnvelope {
   using point_t = Point<COORD_T, N_DIMS>;
   using envelope_t = Envelope<point_t>;
+
   ArrayView<size_t> prefix_sum;
   ArrayView<envelope_t> queries;
   ArrayView<envelope_t> envelopes;
-  dev::Queue<thrust::pair<uint32_t, uint32_t>> result;
   OptixTraversableHandle handle;
+  void *arg;
 };
 
 template <typename COORD_T, int N_DIMS>
 struct LaunchParamsIntersectsEnvelope {
   using point_t = Point<COORD_T, N_DIMS>;
   using envelope_t = Envelope<point_t>;
-  using ray_params_t = RayParams<COORD_T, N_DIMS>;
 
   ArrayView<size_t> prefix_sum;
   ArrayView<envelope_t> geoms;
   ArrayView<envelope_t> queries;
-  dev::Queue<thrust::pair<uint32_t, uint32_t>> result;
   OptixTraversableHandle handle;
   void *arg;
 };

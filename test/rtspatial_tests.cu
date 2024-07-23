@@ -7,7 +7,7 @@
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   std::string exec_path = argv[0];
-  ptx_root = exec_path.substr(0, exec_path.find_last_of('/')) + "/ptx";
+  ptx_root = PTX_ROOT;
 
   return RUN_ALL_TESTS();
 }

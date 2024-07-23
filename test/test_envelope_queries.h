@@ -13,7 +13,6 @@ TEST(EnvelopeQueries, fp32_intersects_envelope) {
   spatial_index_f2d_t index;
   pinned_vector<envelope_f2d_t> envelopes;
   pinned_vector<envelope_f2d_t> query_envelopes;
-  Queue<thrust::pair<uint32_t, uint32_t>> result;
 
   envelopes.push_back(envelope_f2d_t(point_f2d_t(0, 0), point_f2d_t(1, 1)));
 
@@ -23,17 +22,16 @@ TEST(EnvelopeQueries, fp32_intersects_envelope) {
   query_envelopes.push_back(
       envelope_f2d_t(point_f2d_t(0.75, 0.25), point_f2d_t(1.25, 0.75)));
 
-  result.Init(1000);
   Stream stream;
   Config config;
   config.ptx_root = ptx_root;
 
   index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
-  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(query_envelopes), result,
-                            stream.cuda_stream());
-  uint32_t n_res = result.size(stream.cuda_stream());
-  std::cout << "Intersects " << n_res << std::endl;
+  counter.set(stream.cuda_stream(), 0);
+  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(query_envelopes),
+                            counter.data(), stream.cuda_stream());
+  auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 2);
 }
 
@@ -46,18 +44,16 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_big) {
       GenerateUniformBoxes<float>(n2, 0.1, 0.1);
 
   spatial_index_f2d_t index;
-  Queue<thrust::pair<uint32_t, uint32_t>> result;
   Stream stream;
-
-  result.Init(n1 * n2 * 0.1);
   Config config;
 
   config.ptx_root = ptx_root;
   index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
-  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), result,
+  counter.set(stream.cuda_stream(), 0);
+  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), counter.data(),
                             stream.cuda_stream());
-  uint32_t n_res = result.size(stream.cuda_stream());
+  auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 6549771);
 }
 
@@ -70,18 +66,16 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_big_enable_triangle) {
       GenerateUniformBoxes<float>(n2, 0.1, 0.1);
 
   SpatialIndex<float, 2, true> index;
-  Queue<thrust::pair<uint32_t, uint32_t>> result;
   Stream stream;
-
-  result.Init(n1 * n2 * 0.1);
   Config config;
 
   config.ptx_root = ptx_root;
   index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
-  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), result,
+  counter.set(stream.cuda_stream(), 0);
+  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), counter.data(),
                             stream.cuda_stream());
-  uint32_t n_res = result.size(stream.cuda_stream());
+  auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 6549771);
 }
 
@@ -94,16 +88,14 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch) {
       GenerateUniformBoxes<float>(n2, 0.1, 0.1);
 
   spatial_index_f2d_t index;
-  Queue<thrust::pair<uint32_t, uint32_t>> result;
   Stream stream;
-
-  result.Init(n1 * n2 * 0.1);
   Config config;
 
   config.ptx_root = ptx_root;
   index.Init(config);
   int n_batches = 10;
   int avg_size = (envelopes.size() + n_batches - 1) / n_batches;
+  counter.set(stream.cuda_stream(), 0);
 
   for (int i_batch = 0; i_batch < n_batches; i_batch++) {
     size_t begin = i_batch * avg_size;
@@ -114,9 +106,9 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch) {
                      thrust::raw_pointer_cast(envelopes.data()) + begin, size),
                  stream.cuda_stream());
   }
-  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), result,
+  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), counter.data(),
                             stream.cuda_stream());
-  uint32_t n_res = result.size(stream.cuda_stream());
+  auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 6549771);
 }
 
@@ -130,13 +122,11 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch_update) {
       GenerateUniformBoxes<float>(n2, 0.1, 0.1);
 
   spatial_index_f2d_t index;
-  Queue<thrust::pair<uint32_t, uint32_t>> result;
   Stream stream;
   Config config;
 
   config.ptx_root = ptx_root;
 
-  result.Init(n1 * n2 * 0.1);
   index.Init(config);
   int n_batches = 10;
   int avg_size = (envelopes.size() + n_batches - 1) / n_batches;
@@ -176,19 +166,20 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch_update) {
     tmp_index.Init(config);
     tmp_index.Insert(ArrayView<envelope_f2d_t>(tmp_envelopes),
                      stream.cuda_stream());
-    tmp_index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), result,
-                                  stream.cuda_stream());
-    answer = result.size(stream.cuda_stream());
+    counter.set(stream.cuda_stream(), 0);
+    tmp_index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries),
+                                  counter.data(), stream.cuda_stream());
+    answer = counter.get(stream.cuda_stream());
   }
   thrust::device_vector<thrust::pair<size_t, envelope_f2d_t>> d_updates =
       updates;
   index.Update(ArrayView<thrust::pair<size_t, envelope_f2d_t>>(d_updates),
                stream.cuda_stream());
   stream.Sync();
-  result.Clear(stream.cuda_stream());
-  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), result,
+  counter.set(stream.cuda_stream(), 0);
+  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), counter.data(),
                             stream.cuda_stream());
-  uint32_t n_res = result.size(stream.cuda_stream());
+  auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, answer);
 }
 

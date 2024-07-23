@@ -12,28 +12,20 @@ extern "C" __constant__
     rtspatial::details::LaunchParamsContainsPoint<FLOAT_TYPE, 2>
         params;
 
-
-extern "C" __device__ void __direct_callable__rtspatial_hit(uint32_t geom_id,
-                                                            uint32_t query_id,
-                                                            void *arg) {
-
-}
-
 extern "C" __global__ void __anyhit__contains_point_query_2d_triangle() {
   auto primitive_idx = optixGetPrimitiveIndex();
   auto box_id = primitive_idx / 2;
   auto inst_id = optixGetInstanceId();
-  auto envelope_id = params.prefix_sum[inst_id] + box_id;
+  auto geom_id = params.prefix_sum[inst_id] + box_id;
   auto query_id = optixGetPayload_0();
-  const auto& envelope = params.envelopes[envelope_id];
+  const auto& envelope = params.envelopes[geom_id];
   const auto& query = params.queries[query_id];
   const auto& min_corner = envelope.get_min();
   const auto& max_corner = envelope.get_max();
 
-
-//  if (envelope.Contains(query)) {
-    params.result.Append(thrust::make_pair(envelope_id, query_id));
-//  }
+  //  if (envelope.Contains(query)) {
+  rtspatial_handle_point_contains(geom_id, query_id, params.arg);
+  //  }
   optixIgnoreIntersection();
 }
 

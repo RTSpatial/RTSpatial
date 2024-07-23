@@ -14,7 +14,6 @@ set(RTSPATIAL_LIB_VERSION "1.0")
 
 set(ENABLED_ARCHS "80")
 
-
 if (NOT WIN32)
     # visual studio doesn't like these (not need them):
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --std=c++17")
@@ -66,6 +65,7 @@ find_package(CUDAToolkit REQUIRED)
 include(cmake/configure_build_type.cmake)
 include(cmake/FindOptiX.cmake)
 include(cmake/nvcuda_compile_module.cmake)
+include(cmake/rtspatial_compile_shaders.cmake)
 include_directories(${PROJECT_SOURCE_DIR})
 # ------------------------------------------------------------------
 # and final build rules for the project

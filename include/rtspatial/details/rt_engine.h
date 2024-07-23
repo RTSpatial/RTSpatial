@@ -38,7 +38,6 @@ enum ModuleIdentifier {
   MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD,
   MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD,
   MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD,
-  MODULE_ID_EXTERNAL,
   NUM_MODULE_IDENTIFIERS
 };
 static const float IDENTICAL_TRANSFORMATION_MTX[12] = {
@@ -110,7 +109,6 @@ struct RTConfig {
         logCallbackLevel(1),
         opt_level(OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         dbg_level(OPTIX_COMPILE_DEBUG_LEVEL_NONE),
-        temp_buf_size(100 * 1024 * 1024),
         n_pipelines(1) {}
 
   void AddModule(const Module& mod) {
@@ -122,14 +120,6 @@ struct RTConfig {
     modules[mod.get_id()] = mod;
   }
 
-  void SetExternalModule(const Module& mod) {
-    if (access(mod.get_program_path().c_str(), R_OK) != 0) {
-      std::cerr << "Error: cannot open " << mod.get_program_path() << std::endl;
-      abort();
-    }
-    external_module = mod;
-  }
-
   int max_reg_count;
   int max_traversable_depth;
   int max_trace_depth;
@@ -137,8 +127,6 @@ struct RTConfig {
   OptixCompileOptimizationLevel opt_level;
   OptixCompileDebugLevel dbg_level;
   std::map<ModuleIdentifier, Module> modules;
-  Module external_module;
-  size_t temp_buf_size;
   int n_pipelines;
 };
 
@@ -152,7 +140,6 @@ class RTEngine {
     initOptix(config);
     createContext();
     createModule(config);
-    createExternalPrograms(config);
     createRaygenPrograms(config);
     createMissPrograms(config);
     createHitgroupPrograms(config);
@@ -273,7 +260,6 @@ class RTEngine {
 
   void createModule(const RTConfig& config);
 
-  void createExternalPrograms(const RTConfig& config);
 
   void createRaygenPrograms(const RTConfig& config);
 
@@ -364,9 +350,6 @@ class RTEngine {
 
   std::vector<OptixProgramGroup> miss_pgs_;
   std::vector<thrust::device_vector<MissRecord>> miss_records_;
-
-  OptixProgramGroup external_pg_;
-  std::vector<thrust::device_vector<CallableRecord>> callable_records_;
 
   std::vector<OptixProgramGroup> hitgroup_pgs_;
   std::vector<thrust::device_vector<HitgroupRecord>> hitgroup_records_;

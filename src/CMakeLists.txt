@@ -1,72 +1,15 @@
 include_directories(${OptiX_INCLUDE})
 include_directories(${PROJECT_SOURCE_DIR}/src)
-
-message("OptiX_INCLUDE: ${OptiX_INCLUDE}")
-
-set(OPTIX_MODULE_EXTENSION ".ptx")
-set(OPTIX_PROGRAM_TARGET "--ptx")
-
-set(SHADERS
-        "${PROJECT_SOURCE_DIR}/src/shaders/shaders_contains_point_query_2d_triangle.cu"
-        "${PROJECT_SOURCE_DIR}/src/shaders/shaders_contains_point_query_2d.cu"
-        "${PROJECT_SOURCE_DIR}/src/shaders/shaders_contains_envelope_query_2d.cu"
-        "${PROJECT_SOURCE_DIR}/src/shaders/shaders_intersects_envelope_query_2d.cu"
-)
-
-#set(SHADERS_HEADERS "${PROJECT_SOURCE_DIR}/include/details/launch_parameters.h")
-
-
-set(ALL_PROGRAM_MODULES "")
-set(FLOAT_TYPES "float;double")
-foreach (FLOAT_TYPE IN LISTS FLOAT_TYPES)
-    NVCUDA_COMPILE_MODULE(
-            SOURCES ${SHADERS}
-            DEPENDENCIES ${SHADERS_HEADERS}
-            TARGET_PATH "${MODULE_TARGET_DIR}/ptx"
-            PREFIX "${FLOAT_TYPE}_"
-            EXTENSION "${OPTIX_MODULE_EXTENSION}"
-            GENERATED_FILES PROGRAM_MODULES
-            NVCC_OPTIONS "${OPTIX_PROGRAM_TARGET}"
-            "--gpu-architecture=compute_${ENABLED_ARCHS}"
-            "--relocatable-device-code=true"
-            "--expt-relaxed-constexpr"
-            "-Wno-deprecated-gpu-targets"
-            "-I${OptiX_INCLUDE}"
-            "-I${PROJECT_SOURCE_DIR}/include"
-            "-DFLOAT_TYPE=${FLOAT_TYPE}"
-    )
-    list(APPEND ALL_PROGRAM_MODULES ${PROGRAM_MODULES})
-endforeach ()
+include_directories("${PROJECT_SOURCE_DIR}/include")
 
 set(RTSPATIAL_HDR_DIR "${PROJECT_SOURCE_DIR}/include/rtspatial/")
 set(RTPSATIAL_SRC_DIR "${PROJECT_SOURCE_DIR}/src")
-set(RTPSATIAL_CUH "")
-set(RTPSATIAL_CU "")
 
-set(RTPSATIAL_BASE_CUH
-        "${RTSPATIAL_HDR_DIR}/geom/point.cuh"
-        "${RTSPATIAL_HDR_DIR}/geom/envelope.cuh"
-        "${RTSPATIAL_HDR_DIR}/rtspatial.h"
-        "${RTSPATIAL_HDR_DIR}/spatial_index.cuh"
-)
-
-list(APPEND RTPSATIAL_CUH ${RTPSATIAL_BASE_CUH})
-
-
-set(RTPSATIAL_BASE_CU
-        "${RTPSATIAL_SRC_DIR}/rt_engine.cu"
-)
-
-list(APPEND RTPSATIAL_CU ${RTPSATIAL_BASE_CU})
-list(APPEND RTSPATIAL_CU ${ALL_PROGRAM_MODULES})
-
-set(RTSPATIAL_SOURCES ${RTPSATIAL_CU} ${RTPSATIAL_CUH})
-
-include_directories("${PROJECT_SOURCE_DIR}/include")
 
 ###############################################################################
 # Library
-add_library(rtspatial SHARED ${RTPSATIAL_CU} ${ALL_PROGRAM_MODULES})
+add_library(rtspatial SHARED "${RTPSATIAL_SRC_DIR}/rt_engine.cu")
+
 target_link_libraries(rtspatial
         ${CUDA_LIBRARIES}
         ${CUDA_CUDA_LIBRARY}
@@ -75,7 +18,6 @@ target_link_libraries(rtspatial
 )
 target_compile_options(rtspatial PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda --expt-relaxed-constexpr >)
 set_target_properties(rtspatial PROPERTIES CUDA_ARCHITECTURES "${ENABLED_ARCHS}" CUDA_SEPARABLE_COMPILATION ON)
-
 
 ###############################################################################
 # Targets installation
@@ -88,10 +30,6 @@ include(CMakePackageConfigHelpers)
 install(DIRECTORY ${RTSPATIAL_HDR_DIR}
         DESTINATION include/rtspatial
         FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.cuh")
-
-# Ptx
-install(DIRECTORY "${PROJECT_BINARY_DIR}/ptx"
-        DESTINATION "${RTSPATIAL_LIB_DIR}")
 
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/src/shaders"
         DESTINATION "${RTSPATIAL_LIB_DIR}")

@@ -13,9 +13,8 @@ message("OptiX_INSTALL_DIR: ${OptiX_INSTALL_DIR}")
 
 include("${RTSPATIAL_LIBRARY_DIR}/cmake/rtspatial/FindOptiX.cmake")
 include("${RTSPATIAL_LIBRARY_DIR}/cmake/rtspatial/nvcuda_compile_module.cmake")
+include("${RTSPATIAL_LIBRARY_DIR}/cmake/rtspatial/rtspatial_compile_shaders.cmake")
 
-# Add shaders
-file(GLOB RTSPATIAL_SHADERS "${RTSPATIAL_SHADER_DIR}/*.cu")
 
 include_directories(${OptiX_INCLUDE})
 
