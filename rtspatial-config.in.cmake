@@ -31,6 +31,7 @@ FUNCTION(RTSPATIAL_COMPILE_SHADERS CALLBACK_INCLUDE_DIR CALLBACK_HEADER OUTPUT_D
                 EXTENSION "${OPTIX_MODULE_EXTENSION}"
                 GENERATED_FILES PROGRAM_MODULES
                 NVCC_OPTIONS "${OPTIX_PROGRAM_TARGET}"
+                "--use_fast_math"
                 "--relocatable-device-code=true"
                 "--expt-relaxed-constexpr"
                 "-Wno-deprecated-gpu-targets"
