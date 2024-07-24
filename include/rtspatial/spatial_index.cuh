@@ -12,7 +12,6 @@
 #include "rtspatial/geom/point.cuh"
 #include "rtspatial/utils/array_view.h"
 #include "rtspatial/utils/bitset.h"
-#include "rtspatial/utils/event_pool.h"
 #include "rtspatial/utils/helpers.h"
 #include "rtspatial/utils/queue.h"
 #include "rtspatial/utils/stopwatch.h"
