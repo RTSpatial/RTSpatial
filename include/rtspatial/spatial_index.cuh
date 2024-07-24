@@ -489,10 +489,12 @@ class SpatialIndex {
 
   int CalculateBestParallelism(ArrayView<envelope_t> queries,
                                cudaStream_t cuda_stream = nullptr) {
+    int best_parallelism = 1;
     auto n_geoms = envelopes_.size();
     auto n_queries = queries.size();
+
     if (n_geoms == 0 || n_queries == 0) {
-      return 1;
+      return best_parallelism;
     }
 
     ArrayView<envelope_t> v_envelopes(envelopes_);
@@ -507,13 +509,14 @@ class SpatialIndex {
     sampler_.Sample(cuda_stream, v_envelopes, geom_sample_size, geom_samples_);
     sampler_.Sample(cuda_stream, queries, query_sample_size, query_samples_);
 
+    ArrayView<envelope_t> v_geom_samples(geom_samples_);
+    ArrayView<envelope_t> v_query_samples(query_samples_);
+
     int grid_size, block_size;
 
     CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(
         &grid_size, &block_size, details::CalculateNumIntersects<envelope_t>, 0,
         reinterpret_cast<int>(MAX_BLOCK_SIZE)));
-    ArrayView<envelope_t> v_geom_samples(geom_samples_);
-    ArrayView<envelope_t> v_query_samples(query_samples_);
 
     // Outer loop takes the larger size for high parallelism
     if (v_query_samples.size() > v_geom_samples.size()) {
@@ -531,7 +534,6 @@ class SpatialIndex {
                                    geom_sample_rate / query_sample_rate;
     auto selectivity = (double) predicated_n_intersects / (n_geoms * n_queries);
 
-    int best_parallelism = 1;
     auto min_cost = std::numeric_limits<double>::max();
     int parallelism = 1;
 
@@ -548,8 +550,6 @@ class SpatialIndex {
       }
       parallelism *= 2;
     }
-
-    printf("Predicated selectivity %f\n", selectivity);
 
     return best_parallelism;
   }
