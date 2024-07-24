@@ -337,6 +337,12 @@ class SpatialIndex {
     }
   }
 
+  /**
+   * Return the geometries in the index that contains the query points
+   * @param queries Query points
+   * @param arg argument passing into the callback handler
+   * @param cuda_stream CUDA stream
+   */
   void ContainsWhatQuery(ArrayView<point_t> queries, void* arg,
                          cudaStream_t cuda_stream = nullptr) {
     if (queries.empty() || envelopes_.empty()) {
@@ -384,6 +390,12 @@ class SpatialIndex {
     rt_engine_.Render(cuda_stream, id, dims);
   }
 
+  /**
+   * Return the geometries in the index that contains the query envelopes
+   * @param queries Query envelopes
+   * @param arg argument passing into the callback handler
+   * @param cuda_stream CUDA stream
+   */
   void ContainsWhatQuery(ArrayView<envelope_t> queries, void* arg,
                          cudaStream_t cuda_stream = nullptr) {
     if (queries.empty() || envelopes_.empty()) {
@@ -416,6 +428,12 @@ class SpatialIndex {
     rt_engine_.Render(cuda_stream, id, dims);
   }
 
+  /**
+   * Return the geometries in the index that intersects the query envelopes
+   * @param queries Query envelopes
+   * @param arg argument passing into the callback handler
+   * @param cuda_stream CUDA stream
+   */
   void IntersectsWhatQuery(ArrayView<envelope_t> queries, void* arg,
                            cudaStream_t cuda_stream = nullptr,
                            int parallelism = 32) {
