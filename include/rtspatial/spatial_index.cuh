@@ -1,11 +1,13 @@
 #ifndef RTSPATIAL_SPATIAL_INDEX_H
 #define RTSPATIAL_SPATIAL_INDEX_H
+
 #include <thrust/async/transform.h>
 #include <thrust/device_vector.h>
 #include <thrust/for_each.h>
 #include <thrust/unique.h>
 
 #include "rtspatial/details/rt_engine.h"
+#include "rtspatial/details/sampler.h"
 #include "rtspatial/geom/envelope.cuh"
 #include "rtspatial/geom/point.cuh"
 #include "rtspatial/utils/array_view.h"
@@ -24,7 +26,36 @@ struct Config {
   bool preallocate = false;
   bool prefer_fast_build_geom = false;
   bool prefer_fast_build_query = true;
+  // Parallelism prediction
+  float geom_sample_rate = 0.2;
+  float query_sample_rate = 0.2;
+  float intersect_cost_weight = 0.95;
+  uint32_t max_geom_samples = 10000;
+  uint32_t max_query_samples = 1000;
+  uint32_t max_parallelism = 512;
 };
+
+namespace details {
+
+template <typename ENVELOPE_T>
+__global__ void CalculateNumIntersects(ArrayView<ENVELOPE_T> geoms,
+                                       ArrayView<ENVELOPE_T> queries,
+                                       uint32_t* n_intersects) {
+  auto warp_id = TID_1D / WARP_SIZE;
+  auto n_warps = TOTAL_THREADS_1D / WARP_SIZE;
+  auto lane_id = threadIdx.x % WARP_SIZE;
+
+  for (uint32_t geom_id = warp_id; geom_id < geoms.size(); geom_id += n_warps) {
+    for (uint32_t query_id = lane_id; query_id < queries.size();
+         query_id += WARP_SIZE) {
+      if (geoms[geom_id].Intersects(queries[query_id])) {
+        atomicAdd(n_intersects, 1);
+      }
+    }
+  }
+}
+
+}  // namespace details
 
 // Ref: https://arc2r.github.io/book/Spatial_Predicates.html
 template <typename COORD_T, int N_DIMS, bool USE_TRIANGLE = false>
@@ -35,15 +66,15 @@ class SpatialIndex {
  public:
   using point_t = Point<COORD_T, N_DIMS>;
   using envelope_t = Envelope<point_t>;
-  using result_queue_t = Queue<thrust::pair<uint32_t, uint32_t>>;
 
   void Init(const Config& config) {
     config_ = config;
     details::RTConfig rt_config =
         details::get_default_rt_config(config.ptx_root);
 
+    rt_config.n_pipelines = 10;
+
     rt_engine_.Init(rt_config);
-    ev_pool_.CacheEvents(500);
 
     size_t buf_size = 0;
 
@@ -59,6 +90,10 @@ class SpatialIndex {
       envelopes_.reserve(config.max_geometries);
       aabbs_.reserve(config.max_geometries);
     }
+
+    geom_samples_.resize(config.max_geom_samples);
+    query_samples_.resize(config.max_query_samples);
+    sampler_.Init(std::max(config.max_geom_samples, config.max_query_samples));
     Clear();
   }
 
@@ -382,9 +417,9 @@ class SpatialIndex {
     rt_engine_.Render(cuda_stream, id, dims);
   }
 
-  void IntersectsWhatQuery(const ArrayView<envelope_t> queries, void* arg,
+  void IntersectsWhatQuery(ArrayView<envelope_t> queries, void* arg,
                            cudaStream_t cuda_stream = nullptr,
-                           int parallelism = 500) {
+                           int parallelism = 32) {
     if (queries.empty() || envelopes_.empty()) {
       return;
     }
@@ -431,8 +466,9 @@ class SpatialIndex {
                         return details::EnvelopeToOptixAabb(queries[i], layer);
                       });
 
-    OptixTraversableHandle handle = rt_engine_.BuildAccelCustom(
-        cuda_stream, aabbs_queries, reuse_buf_, true /* prefer_fast_build */);
+    OptixTraversableHandle handle =
+        rt_engine_.BuildAccelCustom(cuda_stream, aabbs_queries, reuse_buf_,
+                                    config_.prefer_fast_build_query);
 
     // Ray tracing from base envelopes
     params.handle = handle;
@@ -452,7 +488,75 @@ class SpatialIndex {
     reuse_buf_.SetTail(curr_buf_size);
   }
 
+  int CalculateBestParallelism(ArrayView<envelope_t> queries,
+                               cudaStream_t cuda_stream = nullptr) {
+    auto n_geoms = envelopes_.size();
+    auto n_queries = queries.size();
+    if (n_geoms == 0 || n_queries == 0) {
+      return 1;
+    }
+
+    ArrayView<envelope_t> v_envelopes(envelopes_);
+
+    uint32_t geom_sample_size =
+        std::min(config_.max_geom_samples,
+                 std::max(1u, (uint32_t) (n_geoms * config_.geom_sample_rate)));
+    uint32_t query_sample_size = std::min(
+        config_.max_query_samples,
+        std::max(1u, (uint32_t) (n_queries * config_.query_sample_rate)));
+
+    sampler_.Sample(cuda_stream, v_envelopes, geom_sample_size, geom_samples_);
+    sampler_.Sample(cuda_stream, queries, query_sample_size, query_samples_);
+
+    int grid_size, block_size;
+
+    CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(
+        &grid_size, &block_size, details::CalculateNumIntersects<envelope_t>, 0,
+        reinterpret_cast<int>(MAX_BLOCK_SIZE)));
+    ArrayView<envelope_t> v_geom_samples(geom_samples_);
+    ArrayView<envelope_t> v_query_samples(query_samples_);
+
+    // Outer loop takes the larger size for high parallelism
+    if (v_query_samples.size() > v_geom_samples.size()) {
+      std::swap(v_geom_samples, v_query_samples);
+    }
+
+    sampled_n_intersects_.set(cuda_stream, 0);
+
+    details::CalculateNumIntersects<<<grid_size, block_size, 0, cuda_stream>>>(
+        v_geom_samples, v_query_samples, sampled_n_intersects_.data());
+
+    auto geom_sample_rate = (double) geom_sample_size / n_geoms;
+    auto query_sample_rate = (double) query_sample_size / n_queries;
+    auto predicated_n_intersects = sampled_n_intersects_.get(cuda_stream) /
+                                   geom_sample_rate / query_sample_rate;
+    auto selectivity = (double) predicated_n_intersects / (n_geoms * n_queries);
+
+    int best_parallelism = 1;
+    auto min_cost = std::numeric_limits<double>::max();
+    int parallelism = 1;
+
+    while (parallelism < config_.max_parallelism) {
+      double per_ray_search_costs = log10(n_queries / parallelism);
+      double cast_rays_costs = n_geoms * parallelism * per_ray_search_costs;
+      double intersect_costs = n_geoms * n_queries * selectivity / parallelism;
+      double cost = (1 - config_.intersect_cost_weight) * cast_rays_costs +
+                    config_.intersect_cost_weight * intersect_costs;
+
+      if (cost < min_cost) {
+        min_cost = cost;
+        best_parallelism = parallelism;
+      }
+      parallelism *= 2;
+    }
+
+    printf("Predicated selectivity %f\n", selectivity);
+
+    return best_parallelism;
+  }
+
  private:
+  Stream extra_stream_;
   Config config_;
   details::RTEngine rt_engine_;
   // Data structures for geometries
@@ -465,7 +569,6 @@ class SpatialIndex {
   std::map<OptixTraversableHandle, std::pair<char*, size_t>> handle_to_as_buf_;
   std::vector<OptixTraversableHandle> gas_handles_, gas_handles_tri_;
 
-  EventPool ev_pool_;
   device_uvector<envelope_t> envelopes_;
   pinned_vector<size_t> h_prefix_sum_;
   thrust::device_vector<size_t> d_prefix_sum_;  // prefix sum for each insertion
@@ -475,6 +578,12 @@ class SpatialIndex {
   // Builtin triangles, contains only
   device_uvector<float3> vertices_;
   device_uvector<uint3> indices_;
+
+  // Cost estimation
+  Sampler sampler_;
+  thrust::device_vector<envelope_t> geom_samples_;
+  thrust::device_vector<envelope_t> query_samples_;
+  SharedValue<uint32_t> sampled_n_intersects_;
 };
 
 }  // namespace rtspatial

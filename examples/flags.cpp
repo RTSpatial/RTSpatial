@@ -8,3 +8,4 @@ DEFINE_string(predicate, "", "predicate, contains, intersects");
 DEFINE_int32(limit_box, -1, "");
 DEFINE_int32(limit_query, -1, "");
 DEFINE_int32(parallelism, 1, "number of BVHs and rays");
+DEFINE_string(serialize, "", "a directory to store serialized wkt file");

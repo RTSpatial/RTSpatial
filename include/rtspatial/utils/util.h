@@ -42,6 +42,7 @@
 #if defined(__CUDACC__) || defined(__CUDABE__)
 #define MAX_BLOCK_SIZE (256)
 #define MAX_GRID_SIZE (768)
+#define WARP_SIZE (32)
 #define TID_1D (threadIdx.x + blockIdx.x * blockDim.x)
 #define TOTAL_THREADS_1D (gridDim.x * blockDim.x)
 #define THRUST_TO_CUPTR(x) \
