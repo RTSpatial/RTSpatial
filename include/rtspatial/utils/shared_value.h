@@ -10,8 +10,6 @@
 namespace rtspatial {
 template <typename T>
 class SharedValue {
-  static_assert(std::is_pod<T>::value, "Unsupported datatype");
-
  public:
   SharedValue() {
     d_buffer_.resize(1);
