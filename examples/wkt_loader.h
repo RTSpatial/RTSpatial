@@ -21,56 +21,58 @@ using point_t = boost::geometry::model::d2::point_xy<coord_t>;
 using box_t = boost::geometry::model::box<point_t>;
 using polygon_t = boost::geometry::model::polygon<point_t>;
 
+
 std::vector<box_t> LoadBoxes(const std::string &path,
                              int limit = std::numeric_limits<int>::max()) {
   std::ifstream ifs(path);
   std::string line;
   std::vector<box_t> boxes;
 
+  auto ring_points_to_bbox = [&boxes](const std::vector<point_t> &points) {
+    coord_t lows[2] = {std::numeric_limits<coord_t>::max(),
+                       std::numeric_limits<coord_t>::max()};
+    coord_t highs[2] = {std::numeric_limits<coord_t>::lowest(),
+                        std::numeric_limits<coord_t>::lowest()};
+
+    for (auto &p : points) {
+      lows[0] = std::min(lows[0], p.x());
+      highs[0] = std::max(highs[0], p.x());
+      lows[1] = std::min(lows[1], p.y());
+      highs[1] = std::max(highs[1], p.y());
+    }
+
+    box_t box(point_t(lows[0], lows[1]), point_t(highs[0], highs[1]));
+
+    boxes.push_back(box);
+  };
+
   while (std::getline(ifs, line)) {
     if (!line.empty()) {
-      std::vector<point_t> points;
 
       if (line.rfind("MULTIPOLYGON", 0) == 0) {
         boost::geometry::model::multi_polygon<polygon_t> multi_poly;
         boost::geometry::read_wkt(line, multi_poly);
 
         for (auto &poly : multi_poly) {
+          std::vector<point_t> points;
           for (auto &p : poly.outer()) {
             points.push_back(p);
           }
+          ring_points_to_bbox(points);
         }
       } else if (line.rfind("POLYGON", 0) == 0) {
         polygon_t poly;
         boost::geometry::read_wkt(line, poly);
+        std::vector<point_t> points;
 
         for (auto &p : poly.outer()) {
           points.push_back(p);
         }
+        ring_points_to_bbox(points);
       } else {
         std::cerr << "Bad Geometry " << line << "\n";
         abort();
       }
-
-      coord_t lows[2] = {std::numeric_limits<coord_t>::max(),
-                         std::numeric_limits<coord_t>::max()};
-      coord_t highs[2] = {std::numeric_limits<coord_t>::lowest(),
-                          std::numeric_limits<coord_t>::lowest()};
-
-      for (auto &p : points) {
-        lows[0] = std::min(lows[0], p.x());
-        highs[0] = std::max(highs[0], p.x());
-        lows[1] = std::min(lows[1], p.y());
-        highs[1] = std::max(highs[1], p.y());
-      }
-
-      box_t box(point_t(lows[0], lows[1]), point_t(highs[0], highs[1]));
-
-      boxes.push_back(box);
-      //      if (boxes.size() % 1000 == 0) {
-      //        std::cout << "Loaded geometries " << boxes.size() / 1000 << " K"
-      //                  << std::endl;
-      //      }
       if (boxes.size() >= limit) {
         break;
       }
