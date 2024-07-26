@@ -613,6 +613,125 @@ class SpatialIndex {
     reuse_buf_.SetTail(curr_buf_size);
   }
 
+  /**
+   * Return the geometries in the index that intersects the query envelopes
+   * @param queries Query envelopes
+   * @param arg argument passing into the callback handler
+   * @param cuda_stream CUDA stream
+   */
+  void IntersectsWhatQueryProfiling(
+      ArrayView<envelope_t> queries,
+      dev::Queue<thrust::pair<uint32_t, uint32_t>>* arg,
+      cudaStream_t cuda_stream = nullptr, int parallelism = 32) {
+    if (queries.empty() || envelopes_.empty()) {
+      return;
+    }
+
+    Stopwatch sw;
+    pinned_vector<uint32_t> h_size(1);
+    uint32_t* p_size = thrust::raw_pointer_cast(h_size.data());
+    size_t n_results_forward, n_results_backward;
+    double t_forward_ms, t_bvh_ms, t_backward_ms;
+    sw.start();
+
+    ArrayView<envelope_t> d_envelopes(envelopes_);
+    details::LaunchParamsIntersectsEnvelope<COORD_T, N_DIMS> params;
+
+    // Query cast rays
+    params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
+    params.geoms = ArrayView<envelope_t>(envelopes_);
+    params.queries = queries;
+    params.arg = arg;
+    params.handle = ias_handle_;
+
+    details::ModuleIdentifier id;
+    if (std::is_same<COORD_T, float>::value) {
+      id = details::ModuleIdentifier::
+          MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD;
+    } else if (std::is_same<COORD_T, double>::value) {
+      id = details::ModuleIdentifier::
+          MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD;
+    }
+
+    dim3 dims;
+
+    dims.x = queries.size();
+    dims.y = 1;
+    dims.z = 1;
+
+    rt_engine_.CopyLaunchParams(cuda_stream, params);
+    rt_engine_.Render(cuda_stream, id, dims);
+    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
+    sw.stop();
+    t_forward_ms = sw.ms();
+
+    thrust::for_each(
+        thrust::device, arg, arg + 1,
+        [=] __device__(dev::Queue<thrust::pair<uint32_t, uint32_t>> & result) {
+          *p_size = result.size();
+        });
+
+    n_results_forward = *p_size;
+
+    sw.start();
+    size_t curr_buf_size = reuse_buf_.GetOccupiedSize();
+    size_t query_aabbs_size = sizeof(OptixAabb) * queries.size();
+    ArrayView<OptixAabb> aabbs_queries(
+        reinterpret_cast<OptixAabb*>(reuse_buf_.Acquire(query_aabbs_size)),
+        queries.size());
+
+    thrust::transform(thrust::cuda::par.on(cuda_stream),
+                      thrust::make_counting_iterator<size_t>(0),
+                      thrust::make_counting_iterator<size_t>(queries.size()),
+                      aabbs_queries.begin(), [=] __device__(size_t i) mutable {
+                        size_t layer = i % parallelism;
+                        return details::EnvelopeToOptixAabb(queries[i], layer);
+                      });
+
+    OptixTraversableHandle handle =
+        rt_engine_.BuildAccelCustom(cuda_stream, aabbs_queries, reuse_buf_,
+                                    config_.prefer_fast_build_query);
+
+    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
+    sw.stop();
+    t_bvh_ms = sw.ms();
+
+    sw.start();
+    // Ray tracing from base envelopes
+    params.handle = handle;
+    dims.x = params.geoms.size();
+    dims.y = parallelism;
+
+    if (std::is_same<COORD_T, float>::value) {
+      id = details::ModuleIdentifier::
+          MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD;
+    } else if (std::is_same<COORD_T, double>::value) {
+      id = details::ModuleIdentifier::
+          MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD;
+    }
+
+    rt_engine_.CopyLaunchParams(cuda_stream, params);
+    rt_engine_.Render(cuda_stream, id, dims);
+    reuse_buf_.SetTail(curr_buf_size);
+    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
+    sw.stop();
+
+    t_backward_ms = sw.ms();
+
+    thrust::for_each(
+        thrust::device, arg, arg + 1,
+        [=] __device__(dev::Queue<thrust::pair<uint32_t, uint32_t>> & result) {
+          *p_size = result.size();
+        });
+
+    n_results_backward = *p_size - n_results_forward;
+
+    std::cout << "Forward pass " << t_forward_ms << " ms, results "
+              << n_results_forward << " BVH " << t_bvh_ms
+              << " ms, Backward pass " << t_backward_ms << " ms, results "
+              << n_results_backward << std::endl;
+  }
+
   int CalculateBestParallelism(ArrayView<envelope_t> queries,
                                cudaStream_t cuda_stream = nullptr) {
     int best_parallelism = 1;

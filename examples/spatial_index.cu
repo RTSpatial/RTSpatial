@@ -52,48 +52,56 @@ int main(int argc, char* argv[]) {
   sw.stop();
   double t_load = sw.ms(), t_query;
   size_t n_results;
-  SharedValue<unsigned long long int> counter;
-
-  counter.set(stream.cuda_stream(), 0);
+  rtspatial::Queue<thrust::pair<uint32_t, uint32_t>> results;
+  rtspatial::SharedValue<
+      rtspatial::Queue<thrust::pair<uint32_t, uint32_t>>::device_t>
+      d_results;
 
   if (!box_query_path.empty()) {
     auto queries = LoadBoxes(box_query_path, limit_query);
     thrust::device_vector<Envelope<Point<coord_t, 2>>> d_queries;
-    std::cout << "Loaded box queries " << queries.size() << std::endl;
+
+    results.Init(std::max(
+        1ul, (size_t) (boxes.size() * queries.size() * FLAGS_load_factor)));
+    d_results.set(stream.cuda_stream(), results.DeviceObject());
 
     CopyBoxes(queries, d_queries);
+    std::cout << "Loaded box queries " << queries.size() << std::endl;
 
     ArrayView<Envelope<Point<coord_t, 2>>> v_queries(d_queries);
 
     sw.start();
     if (predicate == "contains") {
-      index.ContainsWhatQuery(v_queries, counter.data(), stream.cuda_stream());
+      index.ContainsWhatQuery(v_queries, d_results.data(),
+                              stream.cuda_stream());
     } else if (predicate == "intersects") {
       int best_parallelism =
           index.CalculateBestParallelism(v_queries, stream.cuda_stream());
 
-      index.IntersectsWhatQuery(v_queries, counter.data(), stream.cuda_stream(),
-                                best_parallelism);
-      n_results = counter.get(stream.cuda_stream());
+      index.IntersectsWhatQueryProfiling(v_queries, d_results.data(),
+                                stream.cuda_stream(), best_parallelism);
     } else {
       std::cout << "Unsupported predicate\n";
       abort();
     }
-
-    n_results = counter.get(stream.cuda_stream());
+    n_results = results.size(stream.cuda_stream());
     sw.stop();
     t_query = sw.ms();
   } else if (!point_query_path.empty()) {
     auto queries = LoadPoints(point_query_path, limit_query);
     thrust::device_vector<Point<coord_t, 2>> d_queries;
-    std::cout << "Loaded point queries " << queries.size() << std::endl;
+
+    results.Init(std::max(
+        1ul, (size_t) (boxes.size() * queries.size() * FLAGS_load_factor)));
+    d_results.set(stream.cuda_stream(), results.DeviceObject());
 
     CopyPoints(queries, d_queries);
+    std::cout << "Loaded point queries " << queries.size() << std::endl;
 
     sw.start();
     index.ContainsWhatQuery(ArrayView<Point<coord_t, 2>>(d_queries),
-                            counter.data(), stream.cuda_stream());
-    n_results = counter.get(stream.cuda_stream());
+                            d_results.data(), stream.cuda_stream());
+    n_results = results.size(stream.cuda_stream());
     sw.stop();
     t_query = sw.ms();
   }

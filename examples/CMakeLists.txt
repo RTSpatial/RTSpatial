@@ -8,7 +8,7 @@ endif ()
 include_directories(${OptiX_INCLUDE})
 include_directories("${PROJECT_SOURCE_DIR}/include")
 
-RTSPATIAL_COMPILE_SHADERS("${PROJECT_SOURCE_DIR}/include/rtspatial/default_handlers" "counting_handlers.h"
+RTSPATIAL_COMPILE_SHADERS("${PROJECT_SOURCE_DIR}/include/rtspatial/default_handlers" "collecting_handlers.h"
         "${MODULE_TARGET_DIR}/examples_ptx" PROGRAM_MODULES)
 
 ###############################################################################
