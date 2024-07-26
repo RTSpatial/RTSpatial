@@ -24,7 +24,7 @@ struct Config {
   size_t max_queries = 1000 * 1000;
   bool preallocate = false;
   bool prefer_fast_build_geom = false;
-  bool prefer_fast_build_query = true;
+  bool prefer_fast_build_query = false;
   // Parallelism prediction
   float geom_sample_rate = 0.2;
   float query_sample_rate = 0.2;
