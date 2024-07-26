@@ -28,7 +28,7 @@ struct Config {
   // Parallelism prediction
   float geom_sample_rate = 0.2;
   float query_sample_rate = 0.2;
-  float intersect_cost_weight = 0.95;
+  float intersect_cost_weight = 0.9;
   uint32_t max_geom_samples = 10000;
   uint32_t max_query_samples = 1000;
   uint32_t max_parallelism = 512;
@@ -664,7 +664,7 @@ class SpatialIndex {
     int parallelism = 1;
 
     while (parallelism < config_.max_parallelism) {
-      double per_ray_search_costs = log10(n_queries / parallelism);
+      double per_ray_search_costs = log10(n_queries);
       double cast_rays_costs = n_geoms * parallelism * per_ray_search_costs;
       double intersect_costs = n_geoms * n_queries * selectivity / parallelism;
       double cost = (1 - config_.intersect_cost_weight) * cast_rays_costs +
