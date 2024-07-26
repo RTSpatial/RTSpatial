@@ -225,7 +225,115 @@ class SpatialIndex {
     d_prefix_sum_ = h_prefix_sum_;
   }
 
-  void Delete(const ArrayView<size_t> envelope_ids, cudaStream_t stream) {}
+  void Delete(const ArrayView<size_t> envelope_ids, cudaStream_t stream) {
+    touched_batch_ids_.Init(d_prefix_sum_.size() - 1);
+    ArrayView<envelope_t> v_envelopes(envelopes_);
+    ArrayView<OptixAabb> v_aabbs(aabbs_);
+    ArrayView<size_t> v_prefix_sum(d_prefix_sum_);
+    auto v_touched_batch_ids = touched_batch_ids_.DeviceObject();
+    size_t max_id = h_prefix_sum_.back();
+
+    thrust::for_each(
+        thrust::cuda::par.on(stream), envelope_ids.begin(), envelope_ids.end(),
+        [=] __device__(size_t idx) mutable {
+          auto& envelope = v_envelopes[idx];
+
+          assert(idx < max_id);
+          envelope.Invalid();  // Turn into the degenerate case
+          v_aabbs[idx] = details::EnvelopeToOptixAabb(envelope);
+
+          printf("%lu x %f - %f, y %f - %f\n", idx, v_aabbs[idx].minX,
+                 v_aabbs[idx].maxX, v_aabbs[idx].minY, v_aabbs[idx].maxY);
+
+          auto it = thrust::upper_bound(thrust::seq, v_prefix_sum.begin(),
+                                        v_prefix_sum.end(), idx);
+          assert(it != v_prefix_sum.end());
+          auto batch_id = v_prefix_sum.end() - it - 1;
+          assert(batch_id >= 0 && batch_id < v_prefix_sum.size());
+          v_touched_batch_ids.set_bit_atomic(batch_id);
+        });
+
+    auto touched_batch_ids = touched_batch_ids_.DumpPositives(stream);
+
+    for (auto batch_id : touched_batch_ids) {
+      auto handle = gas_handles_[batch_id];
+      auto& buf_size = handle_to_as_buf_.at(handle);
+      auto begin = h_prefix_sum_[batch_id];
+      auto size = h_prefix_sum_[batch_id + 1] - begin;
+      size_t offset = buf_size.first - reuse_buf_.GetData();
+
+      auto new_handle = rt_engine_.UpdateAccelCustom(
+          stream, handle,
+          ArrayView<OptixAabb>(thrust::raw_pointer_cast(aabbs_.data()) + begin,
+                               size),
+          reuse_buf_, offset, config_.prefer_fast_build_geom);
+      // Updating does not change the handle
+      assert(new_handle == handle);
+    }
+
+    // Update triangle vertices
+    if (USE_TRIANGLE) {
+      auto* vertices = thrust::raw_pointer_cast(vertices_.data());
+      auto* indices = thrust::raw_pointer_cast(indices_.data());
+
+      thrust::for_each(thrust::cuda::par.on(stream), envelope_ids.begin(),
+                       envelope_ids.end(), [=] __device__(size_t idx) mutable {
+                         auto& aabb = v_aabbs[idx];
+
+                         details::OptixAabbToTriangles<N_DIMS>(
+                             aabb, idx, vertices, indices);
+                       });
+
+      for (auto batch_id : touched_batch_ids) {
+        auto handle = gas_handles_tri_[batch_id];
+        auto& buf_size = handle_to_as_buf_.at(handle);
+        auto begin = h_prefix_sum_[batch_id];
+        auto size = h_prefix_sum_[batch_id + 1] - begin;
+        size_t buf_offset = buf_size.first - reuse_buf_.GetData();
+
+        auto new_handle = rt_engine_.UpdateAccelTriangle(
+            stream, ArrayView<float3>(vertices + begin * 4, size * 4),
+            ArrayView<uint3>(indices + begin * 2, size * 2), reuse_buf_,
+            buf_offset, config_.prefer_fast_build_geom);
+        // Updating does not change the handle
+        assert(new_handle == handle);
+      }
+    }
+
+    // Rebuild IAS
+    // Pop up IAS buffers before building any GAS buffer
+    auto it_as_buf = handle_to_as_buf_.find(ias_handle_tri_);
+
+    if (it_as_buf != handle_to_as_buf_.end()) {
+      reuse_buf_.Release(it_as_buf->second.second);
+      handle_to_as_buf_.erase(it_as_buf);
+    }
+
+    it_as_buf = handle_to_as_buf_.find(ias_handle_);
+    if (it_as_buf != handle_to_as_buf_.end()) {
+      reuse_buf_.Release(it_as_buf->second.second);
+      handle_to_as_buf_.erase(it_as_buf);
+    }
+
+    char* gas_buf;
+    size_t as_buf_size;
+
+    as_buf_size = reuse_buf_.GetOccupiedSize();
+    gas_buf = reuse_buf_.GetDataTail();
+    ias_handle_ = rt_engine_.BuildInstanceAccel(
+        stream, gas_handles_, reuse_buf_, config_.prefer_fast_build_geom);
+    as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
+    handle_to_as_buf_[ias_handle_] = std::make_pair(gas_buf, as_buf_size);
+
+    if (USE_TRIANGLE) {
+      gas_buf = reuse_buf_.GetDataTail();
+      as_buf_size = reuse_buf_.GetOccupiedSize();
+      ias_handle_tri_ = rt_engine_.BuildInstanceAccel(
+          stream, gas_handles_tri_, reuse_buf_, config_.prefer_fast_build_geom);
+      as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
+      handle_to_as_buf_[ias_handle_tri_] = std::make_pair(gas_buf, as_buf_size);
+    }
+  }
 
   void Update(const ArrayView<thrust::pair<size_t, envelope_t>> updates,
               cudaStream_t stream) {

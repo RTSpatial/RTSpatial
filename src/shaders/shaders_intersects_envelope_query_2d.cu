@@ -100,27 +100,30 @@ extern "C" __global__ void __raygen__intersects_envelope_query_2d_backward() {
        geom_id += optixGetLaunchDimensions().x) {
     unsigned layer = optixGetLaunchIndex().y;
     const auto& geom = params.geoms[geom_id];
-    rtspatial::details::RayParams<FLOAT_TYPE, 2> ray_params;
-    float3 origin, dir;
 
-    ray_params.Compute(geom, false);  // anti-diagonal
-    origin.x = ray_params.o.x;
-    origin.y = ray_params.o.y;
-    origin.z = layer;
+    if (geom.IsValid()) {  // Handle deletion
+      rtspatial::details::RayParams<FLOAT_TYPE, 2> ray_params;
+      float3 origin, dir;
 
-    dir.x = ray_params.d.x;
-    dir.y = ray_params.d.y;
-    dir.z = 0.0f;
+      ray_params.Compute(geom, false);  // anti-diagonal
+      origin.x = ray_params.o.x;
+      origin.y = ray_params.o.y;
+      origin.z = layer;
 
-    float tmin = 0;
-    float tmax = 1;
+      dir.x = ray_params.d.x;
+      dir.y = ray_params.d.y;
+      dir.z = 0.0f;
 
-    optixTrace(params.handle, origin, dir, tmin, tmax, 0,
-               OptixVisibilityMask(255),
-               OPTIX_RAY_FLAG_NONE,  // OPTIX_RAY_FLAG_NONE,
-               SURFACE_RAY_TYPE,     // SBT offset
-               RAY_TYPE_COUNT,       // SBT stride
-               SURFACE_RAY_TYPE,     // missSBTIndex
-               geom_id, layer);
+      float tmin = 0;
+      float tmax = 1;
+
+      optixTrace(params.handle, origin, dir, tmin, tmax, 0,
+                 OptixVisibilityMask(255),
+                 OPTIX_RAY_FLAG_NONE,  // OPTIX_RAY_FLAG_NONE,
+                 SURFACE_RAY_TYPE,     // SBT offset
+                 RAY_TYPE_COUNT,       // SBT stride
+                 SURFACE_RAY_TYPE,     // missSBTIndex
+                 geom_id, layer);
+    }
   }
 }

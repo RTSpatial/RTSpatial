@@ -6,6 +6,7 @@
 #include "rtspatial/geom/point.cuh"
 #include "rtspatial/utils/helpers.h"
 namespace rtspatial {
+// TODO Specialization with COORD_T and N_DIMS
 template <typename POINT_T>
 class Envelope {
   using point_t = POINT_T;
@@ -44,6 +45,12 @@ class Envelope {
     point_t p((min_.get_x() + max_.get_x()) / (coord_t) 2.0,
               (min_.get_y() + max_.get_y()) / (coord_t) 2.0);
     return p;
+  }
+
+  DEV_HOST_INLINE void Invalid() { max_ = min_; }
+
+  DEV_HOST_INLINE bool IsValid() const {
+    return min_.get_x() < max_.get_x() && min_.get_y() < max_.get_y();
   }
 
  private:
@@ -133,6 +140,7 @@ DEV_HOST_INLINE void OptixAabbToTriangles<2>(const OptixAabb& aabb,
   indices[offset * 2 + 1] =
       uint3{offset * 4 + 2, offset * 4 + 1, offset * 4 + 3};
 }
+
 }  // namespace details
 }  // namespace rtspatial
 #endif  // RTSPATIAL_GEOM_ENVELOPE_H
