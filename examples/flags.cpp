@@ -9,3 +9,4 @@ DEFINE_int32(limit_box, -1, "");
 DEFINE_int32(limit_query, -1, "");
 DEFINE_int32(parallelism, 1, "number of BVHs and rays");
 DEFINE_string(serialize, "", "a directory to store serialized wkt file");
+DEFINE_int32(batch, -1, "Batch size for insertion");

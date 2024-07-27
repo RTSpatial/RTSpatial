@@ -77,13 +77,18 @@ class SpatialIndex {
 
     size_t buf_size = 0;
 
-    buf_size += rt_engine_.EstimateMemoryUsageForAABB(config.max_geometries);
+    buf_size += rt_engine_.EstimateMemoryUsageForAABB(
+        config.max_geometries, config.prefer_fast_build_geom);
     if (USE_TRIANGLE) {
-      buf_size +
-          rt_engine_.EstimateMemoryUsageForTriangle(config.max_geometries);
+      buf_size += rt_engine_.EstimateMemoryUsageForTriangle(
+                     config.max_geometries, config.prefer_fast_build_geom);
     }
-    buf_size += rt_engine_.EstimateMemoryUsageForAABB(config.max_queries);
+    buf_size += rt_engine_.EstimateMemoryUsageForAABB(
+        config.max_queries, config.prefer_fast_build_query);
+    // FIXME: Reserve space to IAS, implement EstimateMemoryUsageIAS
+    buf_size *= 1.1;
     buf_size += sizeof(OptixAabb) * config.max_queries;
+
     reuse_buf_.Init(buf_size);
     if (config.preallocate) {
       envelopes_.reserve(config.max_geometries);

@@ -772,7 +772,8 @@ void RTEngine::Render(cudaStream_t cuda_stream, ModuleIdentifier mod,
                           dim.x, dim.y, dim.z));
 }
 
-size_t RTEngine::EstimateMemoryUsageForAABB(size_t num_aabbs) {
+size_t RTEngine::EstimateMemoryUsageForAABB(size_t num_aabbs,
+                                            bool prefer_fast_build) {
   OptixBuildInput build_input = {};
   uint32_t build_input_flags[1] = {OPTIX_GEOMETRY_FLAG_NONE};
 
@@ -788,6 +789,11 @@ size_t RTEngine::EstimateMemoryUsageForAABB(size_t num_aabbs) {
 
   OptixAccelBuildOptions accelOptions = {};
   accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_UPDATE;
+  if (prefer_fast_build) {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
+  } else {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+  }
   accelOptions.motionOptions.numKeys = 1;
   accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
 
@@ -800,7 +806,8 @@ size_t RTEngine::EstimateMemoryUsageForAABB(size_t num_aabbs) {
          blas_buffer_sizes.tempSizeInBytes;
 }
 
-size_t RTEngine::EstimateMemoryUsageForTriangle(size_t num_aabb) {
+size_t RTEngine::EstimateMemoryUsageForTriangle(size_t num_aabb,
+                                                bool prefer_fast_build) {
   uint32_t build_input_flags[1] = {
       OPTIX_GEOMETRY_FLAG_NONE |
       OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL};
@@ -824,6 +831,11 @@ size_t RTEngine::EstimateMemoryUsageForTriangle(size_t num_aabb) {
 
   OptixAccelBuildOptions accelOptions = {};
   accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_UPDATE;
+  if (prefer_fast_build) {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
+  } else {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+  }
   accelOptions.motionOptions.numKeys = 1;
   accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
 

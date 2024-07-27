@@ -27,7 +27,8 @@ class ReusableBuffer {
 
   char* Acquire(size_t size) {
     if (tail_ + size > buf_.size()) {
-      printf("Reuse buffer is drained\n");
+      printf("Reuse buffer is drained. capacity %lu, used %lu, require %lu\n",
+             buf_.size(), tail_, size);
       abort();
     }
     char* prev = thrust::raw_pointer_cast(buf_.data()) + tail_;

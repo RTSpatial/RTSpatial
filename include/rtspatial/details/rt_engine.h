@@ -249,9 +249,11 @@ class RTEngine {
 
   OptixDeviceContext get_context() const { return optix_context_; }
 
-  size_t EstimateMemoryUsageForAABB(size_t num_aabbs);
+  size_t EstimateMemoryUsageForAABB(size_t num_aabbs,
+                                    bool prefer_fast_build);
 
-  size_t EstimateMemoryUsageForTriangle(size_t num_aabbs);
+  size_t EstimateMemoryUsageForTriangle(size_t num_aabbs,
+                                        bool prefer_fast_build);
 
  private:
   void initOptix(const RTConfig& config);

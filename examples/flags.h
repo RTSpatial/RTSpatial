@@ -13,4 +13,5 @@ DECLARE_int32(limit_box);
 DECLARE_int32(limit_query);
 DECLARE_int32(parallelism);
 DECLARE_string(serialize);
+DECLARE_int32(batch);
 #endif  // RTSPATIAL_FLAGS_H

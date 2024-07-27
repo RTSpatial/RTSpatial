@@ -36,20 +36,36 @@ int main(int argc, char* argv[]) {
 
   CopyBoxes(boxes, d_boxes);
 
-  SpatialIndex<coord_t, 2, false> index;
+  SpatialIndex<coord_t, 2, true> index;
   Config config;
   Stream stream;
   Stopwatch sw;
 
   config.ptx_root = PTX_ROOT;
   config.prefer_fast_build_query = false;
+  config.max_geometries = d_boxes.size();
 
   index.Init(config);
+  int batch_size = FLAGS_batch;
+
+  if (batch_size == -1) {
+    batch_size = boxes.size();
+  }
+
+  size_t n_batches = (boxes.size() + batch_size - 1) / batch_size;
 
   sw.start();
-  index.Insert(d_boxes, stream.cuda_stream());
+  for (size_t i_batch = 0; i_batch < n_batches; i_batch++) {
+    auto begin = i_batch * batch_size;
+    auto size = std::min(begin + batch_size, boxes.size()) - begin;
+    index.Insert(
+        rtspatial::ArrayView<rtspatial::Envelope<rtspatial::Point<coord_t, 2>>>(
+            thrust::raw_pointer_cast(d_boxes.data()) + begin, size),
+        stream.cuda_stream());
+  }
   stream.Sync();
   sw.stop();
+
   double t_load = sw.ms(), t_query;
   size_t n_results;
   rtspatial::Queue<thrust::pair<uint32_t, uint32_t>> results;
@@ -78,8 +94,8 @@ int main(int argc, char* argv[]) {
       int best_parallelism =
           index.CalculateBestParallelism(v_queries, stream.cuda_stream());
 
-      index.IntersectsWhatQueryProfiling(v_queries, d_results.data(),
-                                stream.cuda_stream(), best_parallelism);
+      index.IntersectsWhatQueryProfiling(
+          v_queries, d_results.data(), stream.cuda_stream(), best_parallelism);
     } else {
       std::cout << "Unsupported predicate\n";
       abort();
