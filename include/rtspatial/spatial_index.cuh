@@ -57,7 +57,7 @@ __global__ void CalculateNumIntersects(ArrayView<ENVELOPE_T> geoms,
 }  // namespace details
 
 // Ref: https://arc2r.github.io/book/Spatial_Predicates.html
-template <typename COORD_T, int N_DIMS, bool USE_TRIANGLE = false>
+template <typename COORD_T, int N_DIMS>
 class SpatialIndex {
   static_assert(std::is_floating_point<COORD_T>::value,
                 "Unsupported COORD_T type");
@@ -79,10 +79,6 @@ class SpatialIndex {
 
     buf_size += rt_engine_.EstimateMemoryUsageForAABB(
         config.max_geometries, config.prefer_fast_build_geom);
-    if (USE_TRIANGLE) {
-      buf_size += rt_engine_.EstimateMemoryUsageForTriangle(
-          config.max_geometries, config.prefer_fast_build_geom);
-    }
     buf_size += rt_engine_.EstimateMemoryUsageForAABB(
         config.max_queries, config.prefer_fast_build_query);
     // FIXME: Reserve space to IAS, implement EstimateMemoryUsageIAS
@@ -104,18 +100,14 @@ class SpatialIndex {
   void Clear() {
     reuse_buf_.Clear();
     ias_handle_ = 0;
-    ias_handle_tri_ = 0;
     handle_to_as_buf_.clear();
     gas_handles_.clear();
-    gas_handles_tri_.clear();
     envelopes_.clear();
     h_prefix_sum_.clear();
     h_prefix_sum_.push_back(0);
     d_prefix_sum_.clear();
     touched_batch_ids_.Clear();
     aabbs_.clear();
-    vertices_.clear();
-    indices_.clear();
   }
 
   void Insert(ArrayView<envelope_t> envelopes,
@@ -137,14 +129,8 @@ class SpatialIndex {
                         return details::EnvelopeToOptixAabb(envelope);
                       });
     // Pop up IAS buffers before building any GAS buffer
-    auto it_as_buf = handle_to_as_buf_.find(ias_handle_tri_);
 
-    if (it_as_buf != handle_to_as_buf_.end()) {
-      reuse_buf_.Release(it_as_buf->second.second);
-      handle_to_as_buf_.erase(it_as_buf);
-    }
-
-    it_as_buf = handle_to_as_buf_.find(ias_handle_);
+    auto it_as_buf = handle_to_as_buf_.find(ias_handle_);
     if (it_as_buf != handle_to_as_buf_.end()) {
       reuse_buf_.Release(it_as_buf->second.second);
       handle_to_as_buf_.erase(it_as_buf);
@@ -153,43 +139,6 @@ class SpatialIndex {
     OptixTraversableHandle handle;
     char* gas_buf;
     size_t as_buf_size;
-
-    if (USE_TRIANGLE) {
-      size_t prev_vertices_size = vertices_.size();
-      size_t prev_indices_size = indices_.size();
-
-      // 1 aabb consists of two triangles, four vertices
-      vertices_.resize(vertices_.size() + envelopes.size() * 4);
-      indices_.resize(indices_.size() + envelopes.size() * 2);
-
-      float3* vertices =
-          thrust::raw_pointer_cast(vertices_.data()) + prev_vertices_size;
-      uint3* indices =
-          thrust::raw_pointer_cast(indices_.data()) + prev_indices_size;
-
-      thrust::for_each(thrust::cuda::par.on(cuda_stream),
-                       thrust::make_counting_iterator<size_t>(0),
-                       thrust::make_counting_iterator<size_t>(envelopes.size()),
-                       [=] __device__(size_t i) mutable {
-                         const auto& envelope = envelopes[i];
-                         auto aabb = details::EnvelopeToOptixAabb(envelope);
-                         details::OptixAabbToTriangles<N_DIMS>(
-                             aabb, i, vertices, indices);
-                       });
-
-      gas_buf = reuse_buf_.GetDataTail();
-      as_buf_size = reuse_buf_.GetOccupiedSize();
-
-      handle = rt_engine_.BuildAccelTriangle(
-          cuda_stream,
-          ArrayView<float3>(vertices, vertices_.size() - prev_vertices_size),
-          ArrayView<uint3>(indices, indices_.size() - prev_indices_size),
-          reuse_buf_, config_.prefer_fast_build_geom);
-
-      as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
-      handle_to_as_buf_[handle] = std::make_pair(gas_buf, as_buf_size);
-      gas_handles_tri_.push_back(handle);
-    }
 
     // Build GAS
     gas_buf = reuse_buf_.GetDataTail();
@@ -213,17 +162,6 @@ class SpatialIndex {
         cuda_stream, gas_handles_, reuse_buf_, config_.prefer_fast_build_geom);
     as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
     handle_to_as_buf_[ias_handle_] = std::make_pair(gas_buf, as_buf_size);
-
-    // Build IAS of the triangles
-    if (USE_TRIANGLE) {
-      gas_buf = reuse_buf_.GetDataTail();
-      as_buf_size = reuse_buf_.GetOccupiedSize();
-      ias_handle_tri_ = rt_engine_.BuildInstanceAccel(
-          cuda_stream, gas_handles_tri_, reuse_buf_,
-          config_.prefer_fast_build_geom);
-      as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
-      handle_to_as_buf_[ias_handle_tri_] = std::make_pair(gas_buf, as_buf_size);
-    }
 
     h_prefix_sum_.push_back(h_prefix_sum_.back() + envelopes.size());
     d_prefix_sum_ = h_prefix_sum_;
@@ -256,6 +194,7 @@ class SpatialIndex {
 
     auto touched_batch_ids = touched_batch_ids_.DumpPositives(stream);
 
+    // Update GASs
     for (auto batch_id : touched_batch_ids) {
       auto handle = gas_handles_[batch_id];
       auto& buf_size = handle_to_as_buf_.at(handle);
@@ -272,58 +211,18 @@ class SpatialIndex {
       assert(new_handle == handle);
     }
 
-    // Update triangle vertices
-    if (USE_TRIANGLE) {
-      auto* vertices = thrust::raw_pointer_cast(vertices_.data());
-      auto* indices = thrust::raw_pointer_cast(indices_.data());
-
-      thrust::for_each(thrust::cuda::par.on(stream), envelope_ids.begin(),
-                       envelope_ids.end(), [=] __device__(size_t idx) mutable {
-                         auto& aabb = v_aabbs[idx];
-
-                         details::OptixAabbToTriangles<N_DIMS>(
-                             aabb, idx, vertices, indices);
-                       });
-
-      for (auto batch_id : touched_batch_ids) {
-        auto handle = gas_handles_tri_[batch_id];
-        auto& buf_size = handle_to_as_buf_.at(handle);
-        auto begin = h_prefix_sum_[batch_id];
-        auto size = h_prefix_sum_[batch_id + 1] - begin;
-        size_t buf_offset = buf_size.first - reuse_buf_.GetData();
-
-        auto new_handle = rt_engine_.UpdateAccelTriangle(
-            stream, ArrayView<float3>(vertices + begin * 4, size * 4),
-            ArrayView<uint3>(indices + begin * 2, size * 2), reuse_buf_,
-            buf_offset, config_.prefer_fast_build_geom);
-        // Updating does not change the handle
-        assert(new_handle == handle);
-      }
-    }
-
     // Update IAS
-    if (USE_TRIANGLE) {
-      auto it_as_buf = handle_to_as_buf_.find(ias_handle_tri_);
-
-      if (it_as_buf != handle_to_as_buf_.end()) {
-        auto& buf_size = it_as_buf->second;
-        size_t offset = buf_size.first - reuse_buf_.GetData();
-
-        ias_handle_tri_ = rt_engine_.UpdateInstanceAccel(
-            stream, gas_handles_tri_, reuse_buf_, offset,
-            config_.prefer_fast_build_geom);
-      }
-    }
-
     auto it_as_buf = handle_to_as_buf_.find(ias_handle_);
 
     if (it_as_buf != handle_to_as_buf_.end()) {
       auto& buf_size = it_as_buf->second;
       size_t offset = buf_size.first - reuse_buf_.GetData();
 
-      ias_handle_tri_ = rt_engine_.UpdateInstanceAccel(
+      // Handle should not be changed
+      auto new_handle = rt_engine_.UpdateInstanceAccel(
           stream, gas_handles_, reuse_buf_, offset,
           config_.prefer_fast_build_geom);
+      assert(new_handle == ias_handle_);
     }
   }
 
@@ -372,59 +271,18 @@ class SpatialIndex {
       assert(new_handle == handle);
     }
 
-    // Update triangle vertices
-    if (USE_TRIANGLE) {
-      auto* vertices = thrust::raw_pointer_cast(vertices_.data());
-      auto* indices = thrust::raw_pointer_cast(indices_.data());
-
-      thrust::for_each(
-          thrust::cuda::par.on(stream), updates.begin(), updates.end(),
-          [=] __device__(const thrust::pair<size_t, envelope_t>& pair) mutable {
-            size_t idx = pair.first;
-            auto& aabb = v_aabbs[idx];
-
-            details::OptixAabbToTriangles<N_DIMS>(aabb, idx, vertices, indices);
-          });
-
-      for (auto batch_id : touched_batch_ids) {
-        auto handle = gas_handles_tri_[batch_id];
-        auto& buf_size = handle_to_as_buf_.at(handle);
-        auto begin = h_prefix_sum_[batch_id];
-        auto size = h_prefix_sum_[batch_id + 1] - begin;
-        size_t buf_offset = buf_size.first - reuse_buf_.GetData();
-
-        auto new_handle = rt_engine_.UpdateAccelTriangle(
-            stream, ArrayView<float3>(vertices + begin * 4, size * 4),
-            ArrayView<uint3>(indices + begin * 2, size * 2), reuse_buf_,
-            buf_offset, config_.prefer_fast_build_geom);
-        // Updating does not change the handle
-        assert(new_handle == handle);
-      }
-    }
-
     // Update IAS
-    if (USE_TRIANGLE) {
-      auto it_as_buf = handle_to_as_buf_.find(ias_handle_tri_);
-
-      if (it_as_buf != handle_to_as_buf_.end()) {
-        auto& buf_size = it_as_buf->second;
-        size_t offset = buf_size.first - reuse_buf_.GetData();
-
-        ias_handle_tri_ = rt_engine_.UpdateInstanceAccel(
-            stream, gas_handles_tri_, reuse_buf_, offset,
-            config_.prefer_fast_build_geom);
-      }
-    }
-
     auto it_as_buf = handle_to_as_buf_.find(ias_handle_);
 
     if (it_as_buf != handle_to_as_buf_.end()) {
       auto& buf_size = it_as_buf->second;
       size_t offset = buf_size.first - reuse_buf_.GetData();
 
-      ias_handle_tri_ = rt_engine_.UpdateInstanceAccel(
+      // Handle should not be changed
+      auto new_handle = rt_engine_.UpdateInstanceAccel(
           stream, gas_handles_, reuse_buf_, offset,
           config_.prefer_fast_build_geom);
+      assert(new_handle == ias_handle_);
     }
   }
 
@@ -445,31 +303,16 @@ class SpatialIndex {
     params.queries = queries;
     params.envelopes = ArrayView<envelope_t>(envelopes_);
     params.arg = arg;
-    if (USE_TRIANGLE) {
-      params.handle = ias_handle_tri_;
-    } else {
-      params.handle = ias_handle_;
-    }
+    params.handle = ias_handle_;
 
     rt_engine_.CopyLaunchParams(cuda_stream, params);
     details::ModuleIdentifier id =
         details::ModuleIdentifier::NUM_MODULE_IDENTIFIERS;
 
     if (std::is_same<COORD_T, float>::value) {
-      if (USE_TRIANGLE) {
-        id = details::ModuleIdentifier::
-            MODULE_ID_FLOAT_CONTAINS_POINT_QUERY_2D_TRIANGLE;
-      } else {
-        id = details::ModuleIdentifier::MODULE_ID_FLOAT_CONTAINS_POINT_QUERY_2D;
-      }
+      id = details::ModuleIdentifier::MODULE_ID_FLOAT_CONTAINS_POINT_QUERY_2D;
     } else if (std::is_same<COORD_T, double>::value) {
-      if (USE_TRIANGLE) {
-        id = details::ModuleIdentifier::
-            MODULE_ID_DOUBLE_CONTAINS_POINT_QUERY_2D_TRIANGLE;
-      } else {
-        id =
-            details::ModuleIdentifier::MODULE_ID_DOUBLE_CONTAINS_POINT_QUERY_2D;
-      }
+      id = details::ModuleIdentifier::MODULE_ID_DOUBLE_CONTAINS_POINT_QUERY_2D;
     }
 
     dim3 dims;
@@ -792,9 +635,9 @@ class SpatialIndex {
    * GAS1 GAS2 ... GASn IAS IASTri [Query GAS]
    */
   ReusableBuffer reuse_buf_;
-  OptixTraversableHandle ias_handle_, ias_handle_tri_;
+  OptixTraversableHandle ias_handle_;
   std::map<OptixTraversableHandle, std::pair<char*, size_t>> handle_to_as_buf_;
-  std::vector<OptixTraversableHandle> gas_handles_, gas_handles_tri_;
+  std::vector<OptixTraversableHandle> gas_handles_;
 
   device_uvector<envelope_t> envelopes_;
   pinned_vector<size_t> h_prefix_sum_;
@@ -802,9 +645,6 @@ class SpatialIndex {
   Bitset<uint32_t> touched_batch_ids_;
   // Customized AABBs
   device_uvector<OptixAabb> aabbs_;
-  // Builtin triangles, contains only
-  device_uvector<float3> vertices_;
-  device_uvector<uint3> indices_;
 
   // Cost estimation
   Sampler sampler_;

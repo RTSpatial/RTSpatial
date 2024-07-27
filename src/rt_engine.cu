@@ -87,25 +87,6 @@ RTConfig get_default_rt_config(const std::string& ptx_root) {
     config.AddModule(mod);
   }
 
-  {
-    Module mod;
-
-    mod.set_id(
-        ModuleIdentifier::MODULE_ID_FLOAT_CONTAINS_POINT_QUERY_2D_TRIANGLE);
-    mod.set_program_path(ptx_root +
-                         "/float_shaders_contains_point_query_2d_triangle.ptx");
-    mod.set_function_suffix("contains_point_query_2d_triangle");
-    mod.EnableAnyHit();
-    mod.set_n_payload(1);
-
-    config.AddModule(mod);
-
-    mod.set_id(
-        ModuleIdentifier::MODULE_ID_DOUBLE_CONTAINS_POINT_QUERY_2D_TRIANGLE);
-    mod.set_program_path(
-        ptx_root + "/double_shaders_contains_point_query_2d_triangle.ptx");
-    config.AddModule(mod);
-  }
 #ifndef NDEBUG
   config.opt_level = OPTIX_COMPILE_OPTIMIZATION_LEVEL_0;
   config.dbg_level = OPTIX_COMPILE_DEBUG_LEVEL_FULL;

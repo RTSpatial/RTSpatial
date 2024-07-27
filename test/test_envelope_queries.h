@@ -56,27 +56,6 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_big) {
   ASSERT_EQ(n_res, 6549771);
 }
 
-TEST(EnvelopeQueries, fp32_intersects_envelope_big_enable_triangle) {
-  size_t n1 = 100000, n2 = 1000;
-  thrust::device_vector<envelope_f2d_t> envelopes =
-      GenerateUniformBoxes<float>(n1, 0.5, 0.5);
-
-  thrust::device_vector<envelope_f2d_t> queries =
-      GenerateUniformBoxes<float>(n2, 0.1, 0.1);
-
-  SpatialIndex<float, 2, true> index;
-  Stream stream;
-  Config config;
-
-  config.ptx_root = ptx_root;
-  index.Init(config);
-  index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
-  counter.set(stream.cuda_stream(), 0);
-  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), counter.data(),
-                            stream.cuda_stream());
-  auto n_res = counter.get(stream.cuda_stream());
-  ASSERT_EQ(n_res, 6549771);
-}
 
 TEST(EnvelopeQueries, fp32_intersects_envelope_batch) {
   size_t n1 = 100000, n2 = 1000;
