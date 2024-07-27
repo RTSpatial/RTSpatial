@@ -214,7 +214,6 @@ class SpatialIndex {
     as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
     handle_to_as_buf_[ias_handle_] = std::make_pair(gas_buf, as_buf_size);
 
-    CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
     // Build IAS of the triangles
     if (USE_TRIANGLE) {
       gas_buf = reuse_buf_.GetDataTail();
