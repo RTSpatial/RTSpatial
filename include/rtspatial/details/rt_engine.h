@@ -317,6 +317,15 @@ class RTEngine {
            OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT;
   }
 
+  static size_t getInstanceAlignedSize(size_t size) {
+    if (size % OPTIX_INSTANCE_BYTE_ALIGNMENT == 0) {
+      return size;
+    }
+
+    return size - size % OPTIX_INSTANCE_BYTE_ALIGNMENT +
+           OPTIX_INSTANCE_BYTE_ALIGNMENT;
+  }
+
   std::vector<char> readData(const std::string& filename) {
     std::ifstream inputData(filename, std::ios::binary);
 

@@ -701,7 +701,7 @@ OptixTraversableHandle RTEngine::buildInstanceAccel(
                                            1,  // num_build_inputs
                                            &blas_buffer_sizes));
   // Alignment
-  buf.Acquire(getAccelAlignedSize(buf.GetTail()) - buf.GetTail());
+  buf.Acquire(getInstanceAlignedSize(buf.GetTail()) - buf.GetTail());
   char* out_buf = buf.Acquire(blas_buffer_sizes.outputSizeInBytes);
   char* temp_buf = buf.Acquire(blas_buffer_sizes.tempSizeInBytes);
 
@@ -734,7 +734,7 @@ OptixTraversableHandle RTEngine::updateInstanceAccel(
     accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
   }
   accelOptions.motionOptions.numKeys = 1;
-  accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
+  accelOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
 
   OptixAccelBufferSizes blas_buffer_sizes;
   OPTIX_CHECK(optixAccelComputeMemoryUsage(optix_context_, &accelOptions,
@@ -745,7 +745,7 @@ OptixTraversableHandle RTEngine::updateInstanceAccel(
   char* out_buf = buf.GetData() + buf_offset;
   size_t tail = buf.GetTail();
   // Alignment
-  buf.Acquire(getAccelAlignedSize(buf.GetTail()) - buf.GetTail());
+  buf.Acquire(getInstanceAlignedSize(buf.GetTail()) - buf.GetTail());
   char* temp_buf = buf.Acquire(blas_buffer_sizes.tempUpdateSizeInBytes);
 
   OPTIX_CHECK(optixAccelBuild(

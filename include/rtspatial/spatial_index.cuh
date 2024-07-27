@@ -81,7 +81,7 @@ class SpatialIndex {
         config.max_geometries, config.prefer_fast_build_geom);
     if (USE_TRIANGLE) {
       buf_size += rt_engine_.EstimateMemoryUsageForTriangle(
-                     config.max_geometries, config.prefer_fast_build_geom);
+          config.max_geometries, config.prefer_fast_build_geom);
     }
     buf_size += rt_engine_.EstimateMemoryUsageForAABB(
         config.max_queries, config.prefer_fast_build_query);
@@ -238,25 +238,22 @@ class SpatialIndex {
     auto v_touched_batch_ids = touched_batch_ids_.DeviceObject();
     size_t max_id = h_prefix_sum_.back();
 
-    thrust::for_each(
-        thrust::cuda::par.on(stream), envelope_ids.begin(), envelope_ids.end(),
-        [=] __device__(size_t idx) mutable {
-          auto& envelope = v_envelopes[idx];
+    thrust::for_each(thrust::cuda::par.on(stream), envelope_ids.begin(),
+                     envelope_ids.end(), [=] __device__(size_t idx) mutable {
+                       auto& envelope = v_envelopes[idx];
 
-          assert(idx < max_id);
-          envelope.Invalid();  // Turn into the degenerate case
-          v_aabbs[idx] = details::EnvelopeToOptixAabb(envelope);
+                       assert(idx < max_id);
+                       envelope.Invalid();  // Turn into the degenerate case
+                       v_aabbs[idx] = details::EnvelopeToOptixAabb(envelope);
 
-          printf("%lu x %f - %f, y %f - %f\n", idx, v_aabbs[idx].minX,
-                 v_aabbs[idx].maxX, v_aabbs[idx].minY, v_aabbs[idx].maxY);
-
-          auto it = thrust::upper_bound(thrust::seq, v_prefix_sum.begin(),
-                                        v_prefix_sum.end(), idx);
-          assert(it != v_prefix_sum.end());
-          auto batch_id = v_prefix_sum.end() - it - 1;
-          assert(batch_id >= 0 && batch_id < v_prefix_sum.size());
-          v_touched_batch_ids.set_bit_atomic(batch_id);
-        });
+                       auto it = thrust::upper_bound(thrust::seq,
+                                                     v_prefix_sum.begin(),
+                                                     v_prefix_sum.end(), idx);
+                       assert(it != v_prefix_sum.end());
+                       auto batch_id = v_prefix_sum.end() - it - 1;
+                       assert(batch_id >= 0 && batch_id < v_prefix_sum.size());
+                       v_touched_batch_ids.set_bit_atomic(batch_id);
+                     });
 
     auto touched_batch_ids = touched_batch_ids_.DumpPositives(stream);
 
@@ -305,38 +302,29 @@ class SpatialIndex {
       }
     }
 
-    // Rebuild IAS
-    // Pop up IAS buffers before building any GAS buffer
-    auto it_as_buf = handle_to_as_buf_.find(ias_handle_tri_);
-
-    if (it_as_buf != handle_to_as_buf_.end()) {
-      reuse_buf_.Release(it_as_buf->second.second);
-      handle_to_as_buf_.erase(it_as_buf);
-    }
-
-    it_as_buf = handle_to_as_buf_.find(ias_handle_);
-    if (it_as_buf != handle_to_as_buf_.end()) {
-      reuse_buf_.Release(it_as_buf->second.second);
-      handle_to_as_buf_.erase(it_as_buf);
-    }
-
-    char* gas_buf;
-    size_t as_buf_size;
-
-    as_buf_size = reuse_buf_.GetOccupiedSize();
-    gas_buf = reuse_buf_.GetDataTail();
-    ias_handle_ = rt_engine_.BuildInstanceAccel(
-        stream, gas_handles_, reuse_buf_, config_.prefer_fast_build_geom);
-    as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
-    handle_to_as_buf_[ias_handle_] = std::make_pair(gas_buf, as_buf_size);
-
+    // Update IAS
     if (USE_TRIANGLE) {
-      gas_buf = reuse_buf_.GetDataTail();
-      as_buf_size = reuse_buf_.GetOccupiedSize();
-      ias_handle_tri_ = rt_engine_.BuildInstanceAccel(
-          stream, gas_handles_tri_, reuse_buf_, config_.prefer_fast_build_geom);
-      as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
-      handle_to_as_buf_[ias_handle_tri_] = std::make_pair(gas_buf, as_buf_size);
+      auto it_as_buf = handle_to_as_buf_.find(ias_handle_tri_);
+
+      if (it_as_buf != handle_to_as_buf_.end()) {
+        auto& buf_size = it_as_buf->second;
+        size_t offset = buf_size.first - reuse_buf_.GetData();
+
+        ias_handle_tri_ = rt_engine_.UpdateInstanceAccel(
+            stream, gas_handles_tri_, reuse_buf_, offset,
+            config_.prefer_fast_build_geom);
+      }
+    }
+
+    auto it_as_buf = handle_to_as_buf_.find(ias_handle_);
+
+    if (it_as_buf != handle_to_as_buf_.end()) {
+      auto& buf_size = it_as_buf->second;
+      size_t offset = buf_size.first - reuse_buf_.GetData();
+
+      ias_handle_tri_ = rt_engine_.UpdateInstanceAccel(
+          stream, gas_handles_, reuse_buf_, offset,
+          config_.prefer_fast_build_geom);
     }
   }
 
@@ -415,38 +403,29 @@ class SpatialIndex {
       }
     }
 
-    // Rebuild IAS
-    // Pop up IAS buffers before building any GAS buffer
-    auto it_as_buf = handle_to_as_buf_.find(ias_handle_tri_);
-
-    if (it_as_buf != handle_to_as_buf_.end()) {
-      reuse_buf_.Release(it_as_buf->second.second);
-      handle_to_as_buf_.erase(it_as_buf);
-    }
-
-    it_as_buf = handle_to_as_buf_.find(ias_handle_);
-    if (it_as_buf != handle_to_as_buf_.end()) {
-      reuse_buf_.Release(it_as_buf->second.second);
-      handle_to_as_buf_.erase(it_as_buf);
-    }
-
-    char* gas_buf;
-    size_t as_buf_size;
-
-    as_buf_size = reuse_buf_.GetOccupiedSize();
-    gas_buf = reuse_buf_.GetDataTail();
-    ias_handle_ = rt_engine_.BuildInstanceAccel(
-        stream, gas_handles_, reuse_buf_, config_.prefer_fast_build_geom);
-    as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
-    handle_to_as_buf_[ias_handle_] = std::make_pair(gas_buf, as_buf_size);
-
+    // Update IAS
     if (USE_TRIANGLE) {
-      gas_buf = reuse_buf_.GetDataTail();
-      as_buf_size = reuse_buf_.GetOccupiedSize();
-      ias_handle_tri_ = rt_engine_.BuildInstanceAccel(
-          stream, gas_handles_tri_, reuse_buf_, config_.prefer_fast_build_geom);
-      as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
-      handle_to_as_buf_[ias_handle_tri_] = std::make_pair(gas_buf, as_buf_size);
+      auto it_as_buf = handle_to_as_buf_.find(ias_handle_tri_);
+
+      if (it_as_buf != handle_to_as_buf_.end()) {
+        auto& buf_size = it_as_buf->second;
+        size_t offset = buf_size.first - reuse_buf_.GetData();
+
+        ias_handle_tri_ = rt_engine_.UpdateInstanceAccel(
+            stream, gas_handles_tri_, reuse_buf_, offset,
+            config_.prefer_fast_build_geom);
+      }
+    }
+
+    auto it_as_buf = handle_to_as_buf_.find(ias_handle_);
+
+    if (it_as_buf != handle_to_as_buf_.end()) {
+      auto& buf_size = it_as_buf->second;
+      size_t offset = buf_size.first - reuse_buf_.GetData();
+
+      ias_handle_tri_ = rt_engine_.UpdateInstanceAccel(
+          stream, gas_handles_, reuse_buf_, offset,
+          config_.prefer_fast_build_geom);
     }
   }
 
