@@ -174,22 +174,24 @@ class SpatialIndex {
     auto v_touched_batch_ids = touched_batch_ids_.DeviceObject();
     size_t max_id = h_prefix_sum_.back();
 
-    thrust::for_each(thrust::cuda::par.on(stream), envelope_ids.begin(),
-                     envelope_ids.end(), [=] __device__(size_t idx) mutable {
-                       auto& envelope = v_envelopes[idx];
+    thrust::for_each(
+        thrust::cuda::par.on(stream), envelope_ids.begin(), envelope_ids.end(),
+        [=] __device__(size_t idx) mutable {
+          if (idx < v_envelopes.size()) {
+            auto& envelope = v_envelopes[idx];
 
-                       assert(idx < max_id);
-                       envelope.Invalid();  // Turn into the degenerate case
-                       v_aabbs[idx] = details::EnvelopeToOptixAabb(envelope);
+            assert(idx < max_id);
+            envelope.Invalid();  // Turn into the degenerate case
+            v_aabbs[idx] = details::EnvelopeToOptixAabb(envelope);
 
-                       auto it = thrust::upper_bound(thrust::seq,
-                                                     v_prefix_sum.begin(),
-                                                     v_prefix_sum.end(), idx);
-                       assert(it != v_prefix_sum.end());
-                       auto batch_id = v_prefix_sum.end() - it - 1;
-                       assert(batch_id >= 0 && batch_id < v_prefix_sum.size());
-                       v_touched_batch_ids.set_bit_atomic(batch_id);
-                     });
+            auto it = thrust::upper_bound(thrust::seq, v_prefix_sum.begin(),
+                                          v_prefix_sum.end(), idx);
+            assert(it != v_prefix_sum.end());
+            auto batch_id = v_prefix_sum.end() - it - 1;
+            assert(batch_id >= 0 && batch_id < v_prefix_sum.size());
+            v_touched_batch_ids.set_bit_atomic(batch_id);
+          }
+        });
 
     auto touched_batch_ids = touched_batch_ids_.DumpPositives(stream);
 
@@ -210,12 +212,11 @@ class SpatialIndex {
       assert(new_handle == handle);
     }
 
-    // Update IAS
-    auto it_as_buf = handle_to_as_buf_.find(ias_handle_);
-
-    if (it_as_buf != handle_to_as_buf_.end()) {
-      auto& buf_size = it_as_buf->second;
-      size_t offset = buf_size.first - reuse_buf_.GetData();
+    if (!touched_batch_ids.empty()) {
+      // Update IAS
+      auto as_buf = handle_to_as_buf_.at(ias_handle_);
+      auto& buf_size = as_buf.second;
+      size_t offset = as_buf.first - reuse_buf_.GetData();
 
       // Handle should not be changed
       auto new_handle = rt_engine_.UpdateInstanceAccel(
@@ -271,11 +272,11 @@ class SpatialIndex {
     }
 
     // Update IAS
-    auto it_as_buf = handle_to_as_buf_.find(ias_handle_);
-
-    if (it_as_buf != handle_to_as_buf_.end()) {
-      auto& buf_size = it_as_buf->second;
-      size_t offset = buf_size.first - reuse_buf_.GetData();
+    if (!touched_batch_ids.empty()) {
+      // Update IAS
+      auto as_buf = handle_to_as_buf_.at(ias_handle_);
+      auto& buf_size = as_buf.second;
+      size_t offset = as_buf.first - reuse_buf_.GetData();
 
       // Handle should not be changed
       auto new_handle = rt_engine_.UpdateInstanceAccel(
