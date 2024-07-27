@@ -64,6 +64,13 @@ int main(int argc, char* argv[]) {
   stream.Sync();
   sw.stop();
 
+  sw.start();
+  index.Optimize(stream.cuda_stream());
+  stream.Sync();
+  sw.stop();
+
+  std::cout << "Optimize cost " << sw.ms() << std::endl;
+
   double t_load = sw.ms(), t_query;
   size_t n_results;
   rtspatial::Queue<thrust::pair<uint32_t, uint32_t>> results;

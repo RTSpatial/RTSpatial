@@ -412,7 +412,7 @@ OptixTraversableHandle RTEngine::buildAccel(cudaStream_t cuda_stream,
 
   OptixAccelBuildOptions accelOptions = {};
   accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_UPDATE;
-  // FIXME: prefer_fast_build is consistent with updateAccel
+
   if (prefer_fast_build) {
     accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
   } else {
@@ -430,6 +430,71 @@ OptixTraversableHandle RTEngine::buildAccel(cudaStream_t cuda_stream,
   // Alignment
   buf.Acquire(getAccelAlignedSize(buf.GetTail()) - buf.GetTail());
   char* out_buf = buf.Acquire(blas_buffer_sizes.outputSizeInBytes);
+  char* temp_buf = buf.Acquire(blas_buffer_sizes.tempSizeInBytes);
+
+  OPTIX_CHECK(optixAccelBuild(
+      optix_context_, cuda_stream, &accelOptions, &build_input, 1,
+      reinterpret_cast<CUdeviceptr>(temp_buf),
+      blas_buffer_sizes.tempSizeInBytes, reinterpret_cast<CUdeviceptr>(out_buf),
+      blas_buffer_sizes.outputSizeInBytes, &traversable, nullptr, 0));
+
+  buf.Release(blas_buffer_sizes.tempSizeInBytes);
+  return traversable;
+}
+
+OptixTraversableHandle RTEngine::buildAccel(cudaStream_t cuda_stream,
+                                            ArrayView<OptixAabb> aabbs,
+                                            char* buffer, size_t buffer_size,
+                                            ReusableBuffer& buf,
+                                            bool prefer_fast_build) {
+  OptixTraversableHandle traversable;
+  OptixBuildInput build_input = {};
+  CUdeviceptr d_aabb = THRUST_TO_CUPTR(aabbs.data());
+  // Setup AABB build input. Don't disable AH.
+  uint32_t build_input_flags[1] = {OPTIX_GEOMETRY_FLAG_NONE};
+  uint32_t num_prims = aabbs.size();
+
+  assert(reinterpret_cast<uint64_t>(aabbs.data()) %
+             OPTIX_AABB_BUFFER_BYTE_ALIGNMENT ==
+         0);
+
+  build_input.type = OPTIX_BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES;
+  build_input.customPrimitiveArray.aabbBuffers = &d_aabb;
+  build_input.customPrimitiveArray.flags = build_input_flags;
+  build_input.customPrimitiveArray.numSbtRecords = 1;
+  build_input.customPrimitiveArray.numPrimitives = num_prims;
+  // it's important to pass 0 to sbtIndexOffsetBuffer
+  build_input.customPrimitiveArray.sbtIndexOffsetBuffer = 0;
+  build_input.customPrimitiveArray.sbtIndexOffsetSizeInBytes = sizeof(uint32_t);
+  build_input.customPrimitiveArray.primitiveIndexOffset = 0;
+
+  OptixAccelBuildOptions accelOptions = {};
+  accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_UPDATE;
+
+  if (prefer_fast_build) {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
+  } else {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+  }
+  accelOptions.motionOptions.numKeys = 1;
+  accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
+
+  OptixAccelBufferSizes blas_buffer_sizes;
+  OPTIX_CHECK(optixAccelComputeMemoryUsage(optix_context_, &accelOptions,
+                                           &build_input,
+                                           1,  // num_build_inputs
+                                           &blas_buffer_sizes));
+
+  // Alignment
+  auto align_size = getAccelAlignedSize(reinterpret_cast<size_t>(buffer)) -
+                    reinterpret_cast<size_t>(buffer);
+
+  if (align_size + blas_buffer_sizes.outputSizeInBytes > buffer_size) {
+    std::cerr << "Buffer use up" << std::endl;
+    abort();
+  }
+
+  char* out_buf = buffer + align_size;
   char* temp_buf = buf.Acquire(blas_buffer_sizes.tempSizeInBytes);
 
   OPTIX_CHECK(optixAccelBuild(
@@ -501,158 +566,6 @@ OptixTraversableHandle RTEngine::updateAccel(cudaStream_t cuda_stream,
       nullptr, 0));
   buf.SetTail(tail);
   return handle;
-}
-
-OptixTraversableHandle RTEngine::buildAccelTriangle(cudaStream_t cuda_stream,
-                                                    ArrayView<float3> vertices,
-                                                    ArrayView<uint3> indices,
-                                                    ReusableBuffer& buf,
-                                                    bool prefer_fast_build) {
-  OptixTraversableHandle traversable;
-  OptixBuildInput build_input = {};
-  auto d_indices = reinterpret_cast<CUdeviceptr>(indices.data());
-  auto d_vertices = reinterpret_cast<CUdeviceptr>(vertices.data());
-  // Setup AABB build input. Don't disable AH.
-  uint32_t build_input_flags[1] = {
-      OPTIX_GEOMETRY_FLAG_NONE |
-      OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL};
-
-  memset(&build_input.triangleArray, 0, sizeof(build_input.triangleArray));
-
-  build_input.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
-  build_input.triangleArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
-  build_input.triangleArray.vertexStrideInBytes = sizeof(float3);
-  build_input.triangleArray.numVertices = vertices.size();
-  build_input.triangleArray.vertexBuffers = &d_vertices;
-
-  if (indices.empty()) {
-    build_input.triangleArray.indexFormat = OPTIX_INDICES_FORMAT_NONE;
-  } else {
-    build_input.triangleArray.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
-    build_input.triangleArray.indexStrideInBytes = sizeof(uint3);
-    build_input.triangleArray.numIndexTriplets = indices.size();
-    build_input.triangleArray.indexBuffer = d_indices;
-  }
-  build_input.triangleArray.flags = build_input_flags;
-  build_input.triangleArray.numSbtRecords = 1;
-  // it's important to pass 0 to sbtIndexOffsetBuffer
-  build_input.triangleArray.sbtIndexOffsetBuffer = 0;
-  build_input.triangleArray.sbtIndexOffsetSizeInBytes = 0;
-  build_input.triangleArray.primitiveIndexOffset = 0;
-
-  // ==================================================================
-  // Bottom-level acceleration structure (BLAS) setup
-  // ==================================================================
-
-  OptixAccelBuildOptions accelOptions = {};
-  accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_UPDATE;
-  if (prefer_fast_build) {
-    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
-  } else {
-    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
-  }
-#ifndef NDEBUG
-  accelOptions.buildFlags |= OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS;
-#endif
-  accelOptions.motionOptions.numKeys = 1;
-  accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
-
-  OptixAccelBufferSizes blas_buffer_sizes;
-  OPTIX_CHECK(optixAccelComputeMemoryUsage(optix_context_, &accelOptions,
-                                           &build_input,
-                                           1,  // num_build_inputs
-                                           &blas_buffer_sizes));
-  // Alignment
-  buf.Acquire(getAccelAlignedSize(buf.GetTail()) - buf.GetTail());
-  char* out_buf = buf.Acquire(blas_buffer_sizes.outputSizeInBytes);
-  char* temp_buf = buf.Acquire(blas_buffer_sizes.tempSizeInBytes);
-
-  OPTIX_CHECK(optixAccelBuild(
-      optix_context_, cuda_stream, &accelOptions, &build_input, 1,
-      THRUST_TO_CUPTR(temp_buf), blas_buffer_sizes.tempSizeInBytes,
-      THRUST_TO_CUPTR(out_buf), blas_buffer_sizes.outputSizeInBytes,
-      &traversable, nullptr, 0));
-
-  buf.Release(blas_buffer_sizes.tempSizeInBytes);
-
-  return traversable;
-}
-
-OptixTraversableHandle RTEngine::updateAccelTriangle(cudaStream_t cuda_stream,
-                                                     ArrayView<float3> vertices,
-                                                     ArrayView<uint3> indices,
-                                                     ReusableBuffer& buf,
-                                                     size_t buf_offset,
-                                                     bool prefer_fast_build) {
-  OptixTraversableHandle traversable;
-  OptixBuildInput build_input = {};
-  auto d_indices = reinterpret_cast<CUdeviceptr>(indices.data());
-  auto d_vertices = reinterpret_cast<CUdeviceptr>(vertices.data());
-  // Setup AABB build input. Don't disable AH.
-  uint32_t build_input_flags[1] = {
-      OPTIX_GEOMETRY_FLAG_NONE |
-      OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL};
-
-  memset(&build_input.triangleArray, 0, sizeof(build_input.triangleArray));
-
-  build_input.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
-  build_input.triangleArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
-  build_input.triangleArray.vertexStrideInBytes = sizeof(float3);
-  build_input.triangleArray.numVertices = vertices.size();
-  build_input.triangleArray.vertexBuffers = &d_vertices;
-
-  if (indices.empty()) {
-    build_input.triangleArray.indexFormat = OPTIX_INDICES_FORMAT_NONE;
-  } else {
-    build_input.triangleArray.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
-    build_input.triangleArray.indexStrideInBytes = sizeof(uint3);
-    build_input.triangleArray.numIndexTriplets = indices.size();
-    build_input.triangleArray.indexBuffer = d_indices;
-  }
-  build_input.triangleArray.flags = build_input_flags;
-  build_input.triangleArray.numSbtRecords = 1;
-  // it's important to pass 0 to sbtIndexOffsetBuffer
-  build_input.triangleArray.sbtIndexOffsetBuffer = 0;
-  build_input.triangleArray.sbtIndexOffsetSizeInBytes = 0;
-  build_input.triangleArray.primitiveIndexOffset = 0;
-
-  // ==================================================================
-  // Bottom-level acceleration structure (BLAS) setup
-  // ==================================================================
-
-  OptixAccelBuildOptions accelOptions = {};
-  accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_UPDATE;
-  if (prefer_fast_build) {
-    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
-  } else {
-    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
-  }
-#ifndef NDEBUG
-  accelOptions.buildFlags |= OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS;
-#endif
-  accelOptions.motionOptions.numKeys = 1;
-  accelOptions.operation = OPTIX_BUILD_OPERATION_UPDATE;
-
-  OptixAccelBufferSizes blas_buffer_sizes;
-  OPTIX_CHECK(optixAccelComputeMemoryUsage(optix_context_, &accelOptions,
-                                           &build_input,
-                                           1,  // num_build_inputs
-                                           &blas_buffer_sizes));
-  char* out_buf = buf.GetData() + buf_offset;
-  size_t tail = buf.GetTail();
-  // Alignment
-  buf.Acquire(getAccelAlignedSize(buf.GetTail()) - buf.GetTail());
-  char* temp_buf = buf.Acquire(blas_buffer_sizes.tempUpdateSizeInBytes);
-
-  OPTIX_CHECK(optixAccelBuild(
-      optix_context_, cuda_stream, &accelOptions, &build_input, 1,
-      THRUST_TO_CUPTR(temp_buf), blas_buffer_sizes.tempSizeInBytes,
-      THRUST_TO_CUPTR(out_buf), blas_buffer_sizes.outputSizeInBytes,
-      &traversable, nullptr, 0));
-
-  buf.SetTail(tail);
-
-  return traversable;
 }
 
 OptixTraversableHandle RTEngine::buildInstanceAccel(

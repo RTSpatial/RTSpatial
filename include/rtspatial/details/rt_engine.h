@@ -43,8 +43,7 @@ static const float IDENTICAL_TRANSFORMATION_MTX[12] = {
 
 class Module {
  public:
-  Module()
-      : enabled_module_(0), n_payload_(0), n_attribute_(0) {}
+  Module() : enabled_module_(0), n_payload_(0), n_attribute_(0) {}
 
   explicit Module(ModuleIdentifier id)
       : id_(id), enabled_module_(0), n_payload_(0), n_attribute_(0) {}
@@ -152,6 +151,16 @@ class RTEngine {
     return buildAccel(cuda_stream, aabbs, buf, prefer_fast_build);
   }
 
+  OptixTraversableHandle BuildAccelCustom(cudaStream_t cuda_stream,
+                                          ArrayView<OptixAabb> aabbs,
+                                          char* buffer,
+                                          size_t buffer_size,
+                                          ReusableBuffer& buf,
+
+                                          bool prefer_fast_build = false) {
+    return buildAccel(cuda_stream, aabbs, buffer,buffer_size, buf, prefer_fast_build);
+  }
+
   OptixTraversableHandle UpdateAccelCustom(cudaStream_t cuda_stream,
                                            OptixTraversableHandle handle,
                                            ArrayView<OptixAabb> aabbs,
@@ -160,25 +169,6 @@ class RTEngine {
                                            bool prefer_fast_build = false) {
     return updateAccel(cuda_stream, handle, aabbs, buf, buf_offset,
                        prefer_fast_build);
-  }
-
-  OptixTraversableHandle BuildAccelTriangle(cudaStream_t cuda_stream,
-                                            ArrayView<float3> vertices,
-                                            ArrayView<uint3> indices,
-                                            ReusableBuffer& buf,
-                                            bool prefer_fast_build = false) {
-    return buildAccelTriangle(cuda_stream, vertices, indices, buf,
-                              prefer_fast_build);
-  }
-
-  OptixTraversableHandle UpdateAccelTriangle(cudaStream_t cuda_stream,
-                                             ArrayView<float3> vertices,
-                                             ArrayView<uint3> indices,
-                                             ReusableBuffer& buf,
-                                             size_t buf_offset,
-                                             bool prefer_fast_build = false) {
-    return updateAccelTriangle(cuda_stream, vertices, indices, buf, buf_offset,
-                               prefer_fast_build);
   }
 
   OptixTraversableHandle BuildInstanceAccel(
@@ -247,8 +237,7 @@ class RTEngine {
 
   OptixDeviceContext get_context() const { return optix_context_; }
 
-  size_t EstimateMemoryUsageForAABB(size_t num_aabbs,
-                                    bool prefer_fast_build);
+  size_t EstimateMemoryUsageForAABB(size_t num_aabbs, bool prefer_fast_build);
 
   size_t EstimateMemoryUsageForTriangle(size_t num_aabbs,
                                         bool prefer_fast_build);
@@ -259,7 +248,6 @@ class RTEngine {
   void createContext();
 
   void createModule(const RTConfig& config);
-
 
   void createRaygenPrograms(const RTConfig& config);
 
@@ -276,24 +264,16 @@ class RTEngine {
                                     ReusableBuffer& buf,
                                     bool prefer_fast_build);
 
+  OptixTraversableHandle buildAccel(cudaStream_t cuda_stream,
+                                    ArrayView<OptixAabb> aabbs, char* buffer,
+                                    size_t buffer_size, ReusableBuffer& buf,
+                                    bool prefer_fast_build);
+
   OptixTraversableHandle updateAccel(cudaStream_t cuda_stream,
                                      OptixTraversableHandle handle,
                                      ArrayView<OptixAabb> aabbs,
                                      ReusableBuffer& buf, size_t buf_offset,
                                      bool prefer_fast_build);
-
-  OptixTraversableHandle buildAccelTriangle(cudaStream_t cuda_stream,
-                                            ArrayView<float3> vertices,
-                                            ArrayView<uint3> indices,
-                                            ReusableBuffer& buf,
-                                            bool prefer_fast_build);
-
-  OptixTraversableHandle updateAccelTriangle(cudaStream_t cuda_stream,
-                                             ArrayView<float3> vertices,
-                                             ArrayView<uint3> indices,
-                                             ReusableBuffer& buf,
-                                             size_t buf_offset,
-                                             bool prefer_fast_build);
 
   OptixTraversableHandle buildInstanceAccel(cudaStream_t cuda_stream,
                                             ArrayView<OptixInstance> instances,

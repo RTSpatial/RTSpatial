@@ -129,7 +129,6 @@ class SpatialIndex {
                         return details::EnvelopeToOptixAabb(envelope);
                       });
     // Pop up IAS buffers before building any GAS buffer
-
     auto it_as_buf = handle_to_as_buf_.find(ias_handle_);
     if (it_as_buf != handle_to_as_buf_.end()) {
       reuse_buf_.Release(it_as_buf->second.second);
@@ -623,6 +622,133 @@ class SpatialIndex {
     }
 
     return best_parallelism;
+  }
+
+  void Optimize(cudaStream_t cuda_stream = nullptr) {
+    auto gas_num = gas_handles_.size();
+    if (gas_num == 0) {
+      return;
+    }
+
+    size_t total_geoms = h_prefix_sum_.back();
+    size_t avg_geoms = (total_geoms + gas_num - 1) / gas_num;
+    size_t merge_threshold = avg_geoms * 1.5;
+    auto partitions = Optimize(0, gas_num, merge_threshold);
+
+    auto size_list = std::get<0>(partitions);
+    auto buf_list = std::get<1>(partitions);
+    auto handle_list = std::get<2>(partitions);
+    std::vector<size_t> prefix_sum;
+    std::vector<OptixTraversableHandle> gas_handles;
+    size_t curr_geoms = 0;
+
+    prefix_sum.push_back(curr_geoms);
+
+    for (size_t i = 0; i < size_list.size(); i++) {
+      auto n_geoms = size_list[i];
+      auto handle = handle_list[i];
+      // Need rebuild
+      if (handle == 0) {
+        const auto& as_buf = buf_list[i];
+        handle = rt_engine_.BuildAccelCustom(
+            cuda_stream,
+            ArrayView<OptixAabb>(
+                thrust::raw_pointer_cast(aabbs_.data()) + curr_geoms, n_geoms),
+            as_buf.first, as_buf.second, reuse_buf_,
+            config_.prefer_fast_build_geom);
+        handle_to_as_buf_[handle] = as_buf;
+      }
+
+      gas_handles.push_back(handle);
+      curr_geoms += size_list[i];
+      prefix_sum.push_back(curr_geoms);
+    }
+
+    h_prefix_sum_ = prefix_sum;
+    d_prefix_sum_ = h_prefix_sum_;
+    gas_handles_ = gas_handles;
+
+    // Pop up IAS buffers before building any GAS buffer
+    auto it_as_buf = handle_to_as_buf_.find(ias_handle_);
+    if (it_as_buf != handle_to_as_buf_.end()) {
+      reuse_buf_.Release(it_as_buf->second.second);
+      handle_to_as_buf_.erase(it_as_buf);
+    }
+
+    // Build IAS of the above GAS
+    auto gas_buf = reuse_buf_.GetDataTail();
+    auto as_buf_size = reuse_buf_.GetOccupiedSize();
+    ias_handle_ = rt_engine_.BuildInstanceAccel(
+        cuda_stream, gas_handles_, reuse_buf_, config_.prefer_fast_build_geom);
+    as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
+    handle_to_as_buf_[ias_handle_] = std::make_pair(gas_buf, as_buf_size);
+
+    std::cout << "Before " << gas_num << " After " << gas_handles_.size()
+              << std::endl;
+  }
+
+  std::tuple<std::vector<size_t>, std::vector<std::pair<char*, size_t>>,
+             std::vector<OptixTraversableHandle>>
+  Optimize(size_t gas_begin, size_t gas_end, size_t merge_threshold) {
+    if (gas_begin >= gas_end) {
+      return std::make_tuple(std::vector<size_t>{},
+                             std::vector<std::pair<char*, size_t>>{},
+                             std::vector<OptixTraversableHandle>{});
+    }
+
+    auto gas_num = gas_end - gas_begin;
+
+    if (gas_num == 1) {
+      auto n_geoms1 = h_prefix_sum_[gas_begin + 1] - h_prefix_sum_[gas_begin];
+      auto handle = gas_handles_[gas_begin];
+      auto buf = handle_to_as_buf_.at(handle);
+
+      return std::make_tuple(std::vector<size_t>{n_geoms1},
+                             std::vector<std::pair<char*, size_t>>{buf},
+                             std::vector<OptixTraversableHandle>{handle});
+    } else if (gas_num == 2) {
+      auto n_geoms1 = h_prefix_sum_[gas_begin + 1] - h_prefix_sum_[gas_begin];
+      auto n_geoms2 =
+          h_prefix_sum_[gas_begin + 2] - h_prefix_sum_[gas_begin + 1];
+      auto handle1 = gas_handles_[gas_begin];
+      auto handle2 = gas_handles_[gas_begin + 1];
+      auto as_buf1 = handle_to_as_buf_.at(handle1);
+      auto as_buf2 = handle_to_as_buf_.at(handle2);
+
+      if (n_geoms1 <= merge_threshold || n_geoms2 <= merge_threshold) {
+        auto as_buf =
+            std::make_pair(as_buf1.first, as_buf1.second + as_buf2.second);
+        handle_to_as_buf_.erase(handle1);
+        handle_to_as_buf_.erase(handle2);
+
+        return std::make_tuple(std::vector<size_t>{n_geoms1 + n_geoms2},
+                               std::vector<std::pair<char*, size_t>>{as_buf},
+                               std::vector<OptixTraversableHandle>{0});
+      } else {
+        return std::make_tuple(
+            std::vector<size_t>{n_geoms1, n_geoms2},
+            std::vector<std::pair<char*, size_t>>{as_buf1, as_buf2},
+            std::vector<OptixTraversableHandle>{handle1, handle2});
+      }
+    }
+
+    auto mid = (gas_begin + gas_end) / 2;
+    auto left = Optimize(gas_begin, mid, merge_threshold);
+    auto right = Optimize(mid, gas_end, merge_threshold);
+
+    std::vector<size_t> size_list = std::get<0>(left);
+    size_list.insert(size_list.end(), std::get<0>(right).begin(),
+                     std::get<0>(right).end());
+
+    std::vector<std::pair<char*, size_t>> buffer_list = std::get<1>(left);
+    buffer_list.insert(buffer_list.end(), std::get<1>(right).begin(),
+                       std::get<1>(right).end());
+
+    std::vector<OptixTraversableHandle> handle_list = std::get<2>(left);
+    handle_list.insert(handle_list.end(), std::get<2>(right).begin(),
+                       std::get<2>(right).end());
+
+    return std::make_tuple(size_list, buffer_list, handle_list);
   }
 
  private:
