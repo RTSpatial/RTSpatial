@@ -1,13 +1,9 @@
-#include <boost/geometry.hpp>
-
 #include "flags.h"
 #include "rtspatial/spatial_index.cuh"
 #include "rtspatial/utils/stream.h"
 #include "wkt_loader.h"
 
 int main(int argc, char* argv[]) {
-  //  FLAGS_stderrthreshold = 0;
-
   gflags::SetUsageMessage("Usage: -poly1");
   if (argc == 1) {
     gflags::ShowUsageWithFlags(argv[0]);
@@ -36,7 +32,7 @@ int main(int argc, char* argv[]) {
 
   CopyBoxes(boxes, d_boxes);
 
-  SpatialIndex<coord_t, 2, true> index;
+  SpatialIndex<coord_t, 2> index;
   Config config;
   Stream stream;
   Stopwatch sw;
@@ -53,6 +49,8 @@ int main(int argc, char* argv[]) {
   }
 
   size_t n_batches = (boxes.size() + batch_size - 1) / batch_size;
+
+  std::cout << "Batches " << n_batches << std::endl;
 
   sw.start();
   for (size_t i_batch = 0; i_batch < n_batches; i_batch++) {
