@@ -632,7 +632,7 @@ class SpatialIndex {
   // Data structures for geometries
   /*
    * Buffer structure is like a stack
-   * GAS1 GAS2 ... GASn IAS IASTri [Query GAS]
+   * GAS1 GAS2 ... GASn IAS [Query GAS]
    */
   ReusableBuffer reuse_buf_;
   OptixTraversableHandle ias_handle_;

@@ -123,24 +123,6 @@ DEV_HOST_INLINE OptixAabb EnvelopeToOptixAabb<double, 2>(
   return aabb;
 }
 
-template <int N_DIMS>
-DEV_HOST_INLINE void OptixAabbToTriangles(const OptixAabb& aabb,
-                                          uint32_t offset, float3* vertices,
-                                          uint3* indices) {}
-
-template <>
-DEV_HOST_INLINE void OptixAabbToTriangles<2>(const OptixAabb& aabb,
-                                             uint32_t offset, float3* vertices,
-                                             uint3* indices) {
-  vertices[offset * 4] = float3{aabb.minX, aabb.minY, 0};
-  vertices[offset * 4 + 1] = float3{aabb.maxX, aabb.minY, 0};
-  vertices[offset * 4 + 2] = float3{aabb.maxX, aabb.maxY, 0};
-  vertices[offset * 4 + 3] = float3{aabb.minX, aabb.maxY, 0};
-  indices[offset * 2] = uint3{offset * 4, offset * 4 + 1, offset * 4 + 3};
-  indices[offset * 2 + 1] =
-      uint3{offset * 4 + 2, offset * 4 + 1, offset * 4 + 3};
-}
-
 }  // namespace details
 }  // namespace rtspatial
 #endif  // RTSPATIAL_GEOM_ENVELOPE_H
