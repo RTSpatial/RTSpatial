@@ -30,4 +30,9 @@ extern "C" __forceinline__ __device__ void rtspatial_handle_envelope_intersects(
   queue->Append(thrust::make_pair(geom_id, query_id));
 }
 
+extern "C" __forceinline__ __device__ void rtspatial_handle_line_intersects(
+    uint32_t geom_id, uint32_t query_id, void* arg) {
+
+}
+
 #endif

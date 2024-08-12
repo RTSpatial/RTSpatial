@@ -33,6 +33,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <thrust/swap.h>
 
 #include "rtspatial/geom/envelope.cuh"
+#include "rtspatial/geom/line.cuh"
 #include "rtspatial/geom/point.cuh"
 #include "rtspatial/utils/util.h"
 #define FLT_GAMMA(N) (((N) * FLT_EPSILON) / (1 - (N) * FLT_EPSILON))
@@ -52,6 +53,15 @@ template <>
 struct RayParams<float, 2> {
   float2 o;  // ray origin
   float2 d;  // ray direction
+
+
+  DEV_HOST_INLINE void Compute(const Line<Point<float, 2>>& line) {
+    float2 p1{line.get_p1().get_x(), line.get_p1().get_y()};
+    float2 p2{line.get_p2().get_x(), line.get_p2().get_y()};
+
+    o = p1;
+    d = {p2.x - p1.x, p2.y - p1.y};
+  }
 
   DEV_HOST_INLINE void Compute(const Envelope<Point<float, 2>>& envelope,
                                bool diagonal) {
@@ -158,6 +168,25 @@ template <>
 struct RayParams<double, 2> {
   double2 o;  // ray origin
   double2 d;  // ray direction
+
+  DEV_HOST_INLINE void Compute(const Line<Point<double, 2>>& line) {
+    auto min_x = std::min(line.get_p1().get_x(), line.get_p2().get_x());
+    auto min_y = std::min(line.get_p1().get_y(), line.get_p2().get_y());
+
+    auto max_x = std::max(line.get_p1().get_x(), line.get_p2().get_x());
+    auto max_y = std::max(line.get_p1().get_y(), line.get_p2().get_y());
+
+    double2 p1;
+    double2 p2;
+
+    p1.x = next_float_from_double(min_x, -1, 2);
+    p1.y = next_float_from_double(min_y, -1, 2);
+    p2.x = next_float_from_double(max_x, 1, 2);
+    p2.y = next_float_from_double(max_y, 1, 2);
+
+    o = p1;
+    d = {p2.x - p1.x, p2.y - p1.y};
+  }
 
   DEV_HOST_INLINE void Compute(const Envelope<Point<double, 2>>& envelope,
                                bool inverse) {

@@ -32,10 +32,11 @@ extern "C" __global__ void __raygen__contains_envelope_query_2d() {
   for (auto i = optixGetLaunchIndex().x; i < queries.size();
        i += optixGetLaunchDimensions().x) {
     const auto& query = queries[i];
-    auto center = query.Center();
+    double2 center{(query.get_min().get_x() + query.get_max().get_x()) / 2.0,
+                   (query.get_min().get_y() + query.get_max().get_y()) / 2.0};
     float3 origin;
-    origin.x = center.get_x();
-    origin.y = center.get_y();
+    origin.x = center.x;
+    origin.y = center.y;
     origin.z = 0;
     float3 dir = {0, 0, 1};
 

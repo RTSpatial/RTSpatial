@@ -65,5 +65,36 @@ std::vector<Point<COORD_T, 2>> GenerateUniformPoints(size_t n) {
   }
   return points;
 }
+
+template <typename COORD_T>
+std::vector<Line<Point<COORD_T, 2>>> GenerateUniformLines(size_t n,
+                                                          COORD_T max_width,
+                                                          COORD_T max_height) {
+  std::mt19937 mt(n);
+  std::uniform_real_distribution<COORD_T> min_x(0.0, 1.0);
+  std::uniform_real_distribution<COORD_T> min_y(0.0, 1.0);
+
+  std::uniform_real_distribution<COORD_T> w_dist(0.0, max_width);
+  std::uniform_real_distribution<COORD_T> h_dist(0.0, max_height);
+
+  std::vector<Line<Point<COORD_T, 2>>> lines;
+
+  lines.resize(n);
+
+  for (size_t i = 0; i < n; i++) {
+    auto x = min_x(mt);
+    auto y = min_y(mt);
+    auto w = w_dist(mt);
+    auto h = h_dist(mt);
+
+    Point<COORD_T, 2> p1(x, y);
+    Point<COORD_T, 2> p2(std::min(x + w, (COORD_T) 1.0),
+                         std::min(y + h, (COORD_T) 1.0));
+
+    lines[i] = Line<Point<COORD_T, 2>>(p1, p2);
+  }
+  return lines;
+}
+
 }  // namespace rtspatial
 #endif  // RTSPATIAL_TEST_COMMONS_H

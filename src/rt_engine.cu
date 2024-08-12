@@ -87,6 +87,24 @@ RTConfig get_default_rt_config(const std::string& ptx_root) {
     config.AddModule(mod);
   }
 
+  {
+    Module mod;
+
+    mod.set_id(ModuleIdentifier::MODULE_ID_FLOAT_INTERSECTS_LINE_QUERY_2D);
+    mod.set_program_path(ptx_root +
+                         "/float_shaders_intersects_line_query_2d.ptx");
+    mod.set_function_suffix("intersects_line_query_2d");
+    mod.EnableIsIntersection();
+    mod.set_n_payload(1);
+
+    config.AddModule(mod);
+
+    mod.set_id(ModuleIdentifier::MODULE_ID_DOUBLE_INTERSECTS_LINE_QUERY_2D);
+    mod.set_program_path(ptx_root +
+                         "/double_shaders_intersects_line_query_2d.ptx");
+    config.AddModule(mod);
+  }
+
 #ifndef NDEBUG
   config.opt_level = OPTIX_COMPILE_OPTIMIZATION_LEVEL_0;
   config.dbg_level = OPTIX_COMPILE_DEBUG_LEVEL_FULL;

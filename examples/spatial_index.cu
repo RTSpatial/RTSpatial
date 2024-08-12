@@ -93,8 +93,8 @@ int main(int argc, char* argv[]) {
 
     sw.start();
     if (predicate == "contains") {
-      index.ContainsWhatQuery(v_queries, d_results.data(),
-                              stream.cuda_stream());
+      index.Query(Predicate::kContains, v_queries, d_results.data(),
+                  stream.cuda_stream());
     } else if (predicate == "intersects") {
       int best_parallelism =
           index.CalculateBestParallelism(v_queries, stream.cuda_stream());
@@ -120,8 +120,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Loaded point queries " << queries.size() << std::endl;
 
     sw.start();
-    index.ContainsWhatQuery(ArrayView<Point<coord_t, 2>>(d_queries),
-                            d_results.data(), stream.cuda_stream());
+    index.Query(Predicate::kContains, ArrayView<Point<coord_t, 2>>(d_queries),
+                d_results.data(), stream.cuda_stream());
     n_results = results.size(stream.cuda_stream());
     sw.stop();
     t_query = sw.ms();

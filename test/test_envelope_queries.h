@@ -28,8 +28,9 @@ TEST(EnvelopeQueries, fp32_intersects_envelope) {
   index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
   counter.set(stream.cuda_stream(), 0);
-  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(query_envelopes),
-                            counter.data(), stream.cuda_stream());
+  index.Query(Predicate::kIntersects,
+              ArrayView<envelope_f2d_t>(query_envelopes), counter.data(),
+              stream.cuda_stream());
   auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 2);
 }
@@ -50,12 +51,11 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_big) {
   index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
   counter.set(stream.cuda_stream(), 0);
-  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), counter.data(),
-                            stream.cuda_stream());
+  index.Query(Predicate::kIntersects, ArrayView<envelope_f2d_t>(queries),
+              counter.data(), stream.cuda_stream());
   auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 6549771);
 }
-
 
 TEST(EnvelopeQueries, fp32_intersects_envelope_batch) {
   size_t n1 = 100000, n2 = 1000;
@@ -84,8 +84,8 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch) {
                      thrust::raw_pointer_cast(envelopes.data()) + begin, size),
                  stream.cuda_stream());
   }
-  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), counter.data(),
-                            stream.cuda_stream());
+  index.Query(Predicate::kIntersects, ArrayView<envelope_f2d_t>(queries),
+              counter.data(), stream.cuda_stream());
   auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 6549771);
 }
@@ -145,8 +145,8 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch_update) {
     tmp_index.Insert(ArrayView<envelope_f2d_t>(tmp_envelopes),
                      stream.cuda_stream());
     counter.set(stream.cuda_stream(), 0);
-    tmp_index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries),
-                                  counter.data(), stream.cuda_stream());
+    tmp_index.Query(Predicate::kIntersects, ArrayView<envelope_f2d_t>(queries),
+                    counter.data(), stream.cuda_stream());
     answer = counter.get(stream.cuda_stream());
   }
   thrust::device_vector<thrust::pair<size_t, envelope_f2d_t>> d_updates =
@@ -155,8 +155,8 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch_update) {
                stream.cuda_stream());
   stream.Sync();
   counter.set(stream.cuda_stream(), 0);
-  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(queries), counter.data(),
-                            stream.cuda_stream());
+  index.Query(Predicate::kIntersects, ArrayView<envelope_f2d_t>(queries),
+              counter.data(), stream.cuda_stream());
   auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, answer);
 }
@@ -181,8 +181,9 @@ TEST(EnvelopeQueries, fp32_test_delete) {
   index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
   counter.set(stream.cuda_stream(), 0);
-  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(query_envelopes),
-                            counter.data(), stream.cuda_stream());
+  index.Query(Predicate::kIntersects,
+              ArrayView<envelope_f2d_t>(query_envelopes), counter.data(),
+              stream.cuda_stream());
   auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 2);
 
@@ -192,8 +193,9 @@ TEST(EnvelopeQueries, fp32_test_delete) {
 
   index.Delete(ArrayView<size_t>(deleted_ids), stream.cuda_stream());
   counter.set(stream.cuda_stream(), 0);
-  index.IntersectsWhatQuery(ArrayView<envelope_f2d_t>(query_envelopes),
-                            counter.data(), stream.cuda_stream());
+  index.Query(Predicate::kIntersects,
+              ArrayView<envelope_f2d_t>(query_envelopes), counter.data(),
+              stream.cuda_stream());
   n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 1);
 }

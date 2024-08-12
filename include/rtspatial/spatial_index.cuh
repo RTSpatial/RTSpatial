@@ -9,6 +9,7 @@
 #include "rtspatial/details/rt_engine.h"
 #include "rtspatial/details/sampler.h"
 #include "rtspatial/geom/envelope.cuh"
+#include "rtspatial/geom/line.cuh"
 #include "rtspatial/geom/point.cuh"
 #include "rtspatial/utils/array_view.h"
 #include "rtspatial/utils/bitset.h"
@@ -65,6 +66,7 @@ class SpatialIndex {
  public:
   using point_t = Point<COORD_T, N_DIMS>;
   using envelope_t = Envelope<point_t>;
+  using line_t = Line<point_t>;
 
   void Init(const Config& config) {
     config_ = config;
@@ -287,156 +289,208 @@ class SpatialIndex {
   }
 
   /**
-   * Return the geometries in the index that contains the query points
-   * @param queries Query points
+   * Return the geometries in the index that satisfy p with the queries
+   * @param p predicate
+   * @param queries query points
    * @param arg argument passing into the callback handler
    * @param cuda_stream CUDA stream
    */
-  void ContainsWhatQuery(ArrayView<point_t> queries, void* arg,
-                         cudaStream_t cuda_stream = nullptr) {
+  void Query(Predicate p, ArrayView<point_t> queries, void* arg,
+             cudaStream_t cuda_stream = nullptr) {
     if (queries.empty() || envelopes_.empty()) {
       return;
     }
-    details::LaunchParamsContainsPoint<COORD_T, N_DIMS> params;
+    switch (p) {
+    case Predicate::kContains: {
+      details::LaunchParamsContainsPoint<COORD_T, N_DIMS> params;
 
-    params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
-    params.queries = queries;
-    params.envelopes = ArrayView<envelope_t>(envelopes_);
-    params.arg = arg;
-    params.handle = ias_handle_;
+      params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
+      params.queries = queries;
+      params.envelopes = ArrayView<envelope_t>(envelopes_);
+      params.arg = arg;
+      params.handle = ias_handle_;
 
-    rt_engine_.CopyLaunchParams(cuda_stream, params);
-    details::ModuleIdentifier id =
-        details::ModuleIdentifier::NUM_MODULE_IDENTIFIERS;
+      rt_engine_.CopyLaunchParams(cuda_stream, params);
+      details::ModuleIdentifier id =
+          details::ModuleIdentifier::NUM_MODULE_IDENTIFIERS;
 
-    if (std::is_same<COORD_T, float>::value) {
-      id = details::ModuleIdentifier::MODULE_ID_FLOAT_CONTAINS_POINT_QUERY_2D;
-    } else if (std::is_same<COORD_T, double>::value) {
-      id = details::ModuleIdentifier::MODULE_ID_DOUBLE_CONTAINS_POINT_QUERY_2D;
+      if (std::is_same<COORD_T, float>::value) {
+        id = details::ModuleIdentifier::MODULE_ID_FLOAT_CONTAINS_POINT_QUERY_2D;
+      } else if (std::is_same<COORD_T, double>::value) {
+        id =
+            details::ModuleIdentifier::MODULE_ID_DOUBLE_CONTAINS_POINT_QUERY_2D;
+      }
+
+      dim3 dims;
+
+      dims.x = queries.size();
+      dims.y = 1;
+      dims.z = 1;
+
+      rt_engine_.Render(cuda_stream, id, dims);
+      break;
     }
-
-    dim3 dims;
-
-    dims.x = queries.size();
-    dims.y = 1;
-    dims.z = 1;
-
-    rt_engine_.Render(cuda_stream, id, dims);
+    default:
+      std::cerr << "Invalid predicate" << std::endl;
+      abort();
+    }
   }
 
   /**
-   * Return the geometries in the index that contains the query envelopes
+   * Return the geometries in the index that satisfy p with the queries
+   * @param p predicate
    * @param queries Query envelopes
    * @param arg argument passing into the callback handler
    * @param cuda_stream CUDA stream
    */
-  void ContainsWhatQuery(ArrayView<envelope_t> queries, void* arg,
-                         cudaStream_t cuda_stream = nullptr) {
+  void Query(Predicate p, ArrayView<envelope_t> queries, void* arg,
+             cudaStream_t cuda_stream = nullptr) {
     if (queries.empty() || envelopes_.empty()) {
       return;
     }
-    details::LaunchParamsContainsEnvelope<COORD_T, N_DIMS> params;
 
-    params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
-    params.queries = queries;
-    params.envelopes = ArrayView<envelope_t>(envelopes_);
-    params.arg = arg;
-    params.handle = ias_handle_;
+    switch (p) {
+    case Predicate::kContains: {
+      details::LaunchParamsContainsEnvelope<COORD_T, N_DIMS> params;
 
-    rt_engine_.CopyLaunchParams(cuda_stream, params);
-    details::ModuleIdentifier id;
-    if (std::is_same<COORD_T, float>::value) {
-      id =
-          details::ModuleIdentifier::MODULE_ID_FLOAT_CONTAINS_ENVELOPE_QUERY_2D;
-    } else if (std::is_same<COORD_T, double>::value) {
-      id = details::ModuleIdentifier::
-          MODULE_ID_DOUBLE_CONTAINS_ENVELOPE_QUERY_2D;
+      params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
+      params.queries = queries;
+      params.envelopes = ArrayView<envelope_t>(envelopes_);
+      params.arg = arg;
+      params.handle = ias_handle_;
+
+      rt_engine_.CopyLaunchParams(cuda_stream, params);
+      details::ModuleIdentifier id;
+      if (std::is_same<COORD_T, float>::value) {
+        id = details::ModuleIdentifier::
+            MODULE_ID_FLOAT_CONTAINS_ENVELOPE_QUERY_2D;
+      } else if (std::is_same<COORD_T, double>::value) {
+        id = details::ModuleIdentifier::
+            MODULE_ID_DOUBLE_CONTAINS_ENVELOPE_QUERY_2D;
+      }
+
+      dim3 dims;
+
+      dims.x = queries.size();
+      dims.y = 1;
+      dims.z = 1;
+
+      rt_engine_.Render(cuda_stream, id, dims);
+      break;
     }
 
-    dim3 dims;
+    case Predicate::kIntersects: {
+      ArrayView<envelope_t> d_envelopes(envelopes_);
+      details::LaunchParamsIntersectsEnvelope<COORD_T, N_DIMS> params;
 
-    dims.x = queries.size();
-    dims.y = 1;
-    dims.z = 1;
+      // Query cast rays
+      params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
+      params.geoms = ArrayView<envelope_t>(envelopes_);
+      params.queries = queries;
+      params.arg = arg;
+      params.handle = ias_handle_;
 
-    rt_engine_.Render(cuda_stream, id, dims);
+      details::ModuleIdentifier id;
+      if (std::is_same<COORD_T, float>::value) {
+        id = details::ModuleIdentifier::
+            MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD;
+      } else if (std::is_same<COORD_T, double>::value) {
+        id = details::ModuleIdentifier::
+            MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD;
+      }
+
+      dim3 dims;
+
+      dims.x = queries.size();
+      dims.y = 1;
+      dims.z = 1;
+
+      rt_engine_.CopyLaunchParams(cuda_stream, params);
+      rt_engine_.Render(cuda_stream, id, dims);
+
+      int parallelism = CalculateBestParallelism(queries, cuda_stream);
+
+      size_t curr_buf_size = reuse_buf_.GetOccupiedSize();
+      size_t query_aabbs_size = sizeof(OptixAabb) * queries.size();
+      ArrayView<OptixAabb> aabbs_queries(
+          reinterpret_cast<OptixAabb*>(reuse_buf_.Acquire(query_aabbs_size)),
+          queries.size());
+
+      thrust::transform(
+          thrust::cuda::par.on(cuda_stream),
+          thrust::make_counting_iterator<size_t>(0),
+          thrust::make_counting_iterator<size_t>(queries.size()),
+          aabbs_queries.begin(), [=] __device__(size_t i) mutable {
+            size_t layer = i % parallelism;
+            return details::EnvelopeToOptixAabb(queries[i], layer);
+          });
+
+      OptixTraversableHandle handle =
+          rt_engine_.BuildAccelCustom(cuda_stream, aabbs_queries, reuse_buf_,
+                                      config_.prefer_fast_build_query);
+
+      // Ray tracing from base envelopes
+      params.handle = handle;
+      dims.x = params.geoms.size();
+      dims.y = parallelism;
+
+      if (std::is_same<COORD_T, float>::value) {
+        id = details::ModuleIdentifier::
+            MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD;
+      } else if (std::is_same<COORD_T, double>::value) {
+        id = details::ModuleIdentifier::
+            MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD;
+      }
+
+      rt_engine_.CopyLaunchParams(cuda_stream, params);
+      rt_engine_.Render(cuda_stream, id, dims);
+      reuse_buf_.SetTail(curr_buf_size);
+      break;
+    }
+    }
   }
 
-  /**
-   * Return the geometries in the index that intersects the query envelopes
-   * @param queries Query envelopes
-   * @param arg argument passing into the callback handler
-   * @param cuda_stream CUDA stream
-   */
-  void IntersectsWhatQuery(ArrayView<envelope_t> queries, void* arg,
-                           cudaStream_t cuda_stream = nullptr,
-                           int parallelism = 32) {
+  void Query(Predicate p, ArrayView<line_t> queries, void* arg,
+             cudaStream_t cuda_stream = nullptr) {
     if (queries.empty() || envelopes_.empty()) {
       return;
     }
-
     ArrayView<envelope_t> d_envelopes(envelopes_);
-    details::LaunchParamsIntersectsEnvelope<COORD_T, N_DIMS> params;
 
-    // Query cast rays
-    params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
-    params.geoms = ArrayView<envelope_t>(envelopes_);
-    params.queries = queries;
-    params.arg = arg;
-    params.handle = ias_handle_;
-
-    details::ModuleIdentifier id;
-    if (std::is_same<COORD_T, float>::value) {
-      id = details::ModuleIdentifier::
-          MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD;
-    } else if (std::is_same<COORD_T, double>::value) {
-      id = details::ModuleIdentifier::
-          MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_FORWARD;
+    switch (p) {
+    case Predicate::kContains: {
+      break;
     }
+    case Predicate::kIntersects: {
+      details::LaunchParamsIntersectsLine<COORD_T, N_DIMS> params;
 
-    dim3 dims;
+      // Query cast rays
+      params.prefix_sum = ArrayView<size_t>(d_prefix_sum_);
+      params.geoms = d_envelopes;
+      params.queries = queries;
+      params.arg = arg;
+      params.handle = ias_handle_;
 
-    dims.x = queries.size();
-    dims.y = 1;
-    dims.z = 1;
+      details::ModuleIdentifier id;
+      if (std::is_same<COORD_T, float>::value) {
+        id =
+            details::ModuleIdentifier::MODULE_ID_FLOAT_INTERSECTS_LINE_QUERY_2D;
+      } else if (std::is_same<COORD_T, double>::value) {
+        id = details::ModuleIdentifier::
+            MODULE_ID_DOUBLE_INTERSECTS_LINE_QUERY_2D;
+      }
 
-    rt_engine_.CopyLaunchParams(cuda_stream, params);
-    rt_engine_.Render(cuda_stream, id, dims);
+      dim3 dims;
 
-    size_t curr_buf_size = reuse_buf_.GetOccupiedSize();
-    size_t query_aabbs_size = sizeof(OptixAabb) * queries.size();
-    ArrayView<OptixAabb> aabbs_queries(
-        reinterpret_cast<OptixAabb*>(reuse_buf_.Acquire(query_aabbs_size)),
-        queries.size());
+      dims.x = queries.size();
+      dims.y = 1;
+      dims.z = 1;
 
-    thrust::transform(thrust::cuda::par.on(cuda_stream),
-                      thrust::make_counting_iterator<size_t>(0),
-                      thrust::make_counting_iterator<size_t>(queries.size()),
-                      aabbs_queries.begin(), [=] __device__(size_t i) mutable {
-                        size_t layer = i % parallelism;
-                        return details::EnvelopeToOptixAabb(queries[i], layer);
-                      });
-
-    OptixTraversableHandle handle =
-        rt_engine_.BuildAccelCustom(cuda_stream, aabbs_queries, reuse_buf_,
-                                    config_.prefer_fast_build_query);
-
-    // Ray tracing from base envelopes
-    params.handle = handle;
-    dims.x = params.geoms.size();
-    dims.y = parallelism;
-
-    if (std::is_same<COORD_T, float>::value) {
-      id = details::ModuleIdentifier::
-          MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD;
-    } else if (std::is_same<COORD_T, double>::value) {
-      id = details::ModuleIdentifier::
-          MODULE_ID_DOUBLE_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD;
+      rt_engine_.CopyLaunchParams(cuda_stream, params);
+      rt_engine_.Render(cuda_stream, id, dims);
+      break;
     }
-
-    rt_engine_.CopyLaunchParams(cuda_stream, params);
-    rt_engine_.Render(cuda_stream, id, dims);
-    reuse_buf_.SetTail(curr_buf_size);
+    }
   }
 
   /**
@@ -683,9 +737,6 @@ class SpatialIndex {
         cuda_stream, gas_handles_, reuse_buf_, config_.prefer_fast_build_geom);
     as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
     handle_to_as_buf_[ias_handle_] = std::make_pair(gas_buf, as_buf_size);
-
-    std::cout << "Before " << gas_num << " After " << gas_handles_.size()
-              << std::endl;
   }
 
   std::tuple<std::vector<size_t>, std::vector<std::pair<char*, size_t>>,

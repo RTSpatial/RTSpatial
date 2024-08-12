@@ -1,6 +1,7 @@
 #ifndef RTSPATIAL_GEOM_POINT_H
 #define RTSPATIAL_GEOM_POINT_H
 #include <vector_types.h>
+
 #include "rtspatial/utils/util.h"
 namespace rtspatial {
 
@@ -11,7 +12,7 @@ template <>
 class Point<float, 2> {
  public:
   using coord_t = float;
-  static constexpr int dim = 2;
+  static constexpr int n_dims = 2;
   Point() = default;
 
   DEV_HOST Point(const float2& p) : p_(p) {}
@@ -29,6 +30,13 @@ class Point<float, 2> {
 
   DEV_HOST_INLINE void set_y(float y) { p_.y = y; }
 
+  DEV_HOST_INLINE int get_n_dims() const { return n_dims; }
+
+  DEV_HOST_INLINE float get_coordinate(int dim) const {
+    assert(dim < 2);
+    return reinterpret_cast<const float*>(&p_)[dim];
+  }
+
  private:
   float2 p_;
 };
@@ -37,7 +45,7 @@ template <>
 class Point<double, 2> {
  public:
   using coord_t = double;
-  static constexpr int dim = 2;
+  static constexpr int n_dims = 2;
   Point() = default;
 
   DEV_HOST Point(const double2& p) : p_(p) {}
@@ -54,6 +62,13 @@ class Point<double, 2> {
   DEV_HOST_INLINE double get_y() const { return p_.y; }
 
   DEV_HOST_INLINE void set_y(double y) { p_.y = y; }
+
+  DEV_HOST_INLINE int get_n_dims() const { return n_dims; }
+
+  DEV_HOST_INLINE float get_coordinate(int dim) const {
+    assert(dim < 2);
+    return reinterpret_cast<const double*>(&p_)[dim];
+  }
 
  private:
   double2 p_;

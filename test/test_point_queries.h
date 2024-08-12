@@ -21,8 +21,8 @@ TEST(PointQueries, fp32_contains_point_large) {
   index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
   counter.set(stream.cuda_stream(), 0);
-  index.ContainsWhatQuery(ArrayView<point_f2d_t>(queries), counter.data(),
-                          stream.cuda_stream());
+  index.Query(Predicate::kContains, ArrayView<point_f2d_t>(queries),
+              counter.data(), stream.cuda_stream());
   auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 4224111);
 }
@@ -53,8 +53,8 @@ TEST(PointQueries, fp32_contains_point_large_batch) {
                  stream.cuda_stream());
   }
   counter.set(stream.cuda_stream(), 0);
-  index.ContainsWhatQuery(ArrayView<point_f2d_t>(queries), counter.data(),
-                          stream.cuda_stream());
+  index.Query(Predicate::kContains, ArrayView<point_f2d_t>(queries),
+              counter.data(), stream.cuda_stream());
   auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 4224111);
 }
@@ -83,8 +83,8 @@ TEST(PointQueries, fp32_contains_point) {
   index.Init(config);
   index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
   counter.set(stream.cuda_stream(), 0);
-  index.ContainsWhatQuery(ArrayView<point_f2d_t>(points), counter.data(),
-                          stream.cuda_stream());
+  index.Query(Predicate::kContains, ArrayView<point_f2d_t>(points),
+              counter.data(), stream.cuda_stream());
   auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 5);
 }
@@ -113,8 +113,8 @@ TEST(PointQueries, fp64_contains_point) {
   index.Init(config);
   index.Insert(ArrayView<envelope_d2d_t>(envelopes), stream.cuda_stream());
   counter.set(stream.cuda_stream(), 0);
-  index.ContainsWhatQuery(ArrayView<point_d2d_t>(points), counter.data(),
-                          stream.cuda_stream());
+  index.Query(Predicate::kContains, ArrayView<point_d2d_t>(points),
+              counter.data(), stream.cuda_stream());
   auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 5);
 }

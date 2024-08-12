@@ -19,4 +19,8 @@ extern "C" __forceinline__ __device__ void rtspatial_handle_envelope_intersects(
   atomicAdd(static_cast<unsigned long long int*>(arg), 1);
 }
 
+extern "C" __forceinline__ __device__ void rtspatial_handle_line_intersects(
+    uint32_t geom_id, uint32_t query_id, void* arg) {
+  atomicAdd(static_cast<unsigned long long int*>(arg), 1);
+}
 #endif
