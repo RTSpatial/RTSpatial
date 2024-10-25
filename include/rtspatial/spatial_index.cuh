@@ -803,6 +803,18 @@ class SpatialIndex {
     return std::make_tuple(size_list, buffer_list, handle_list);
   }
 
+  void PrintMemoryUsage() {
+    uint32_t bvh_buf_mb = reuse_buf_.GetCapacity() / 1024 / 1024;
+    uint32_t geometries_mb =
+        envelopes_.size() * sizeof(envelope_t) / 1024 / 1024;
+    uint32_t aabbs_mb = aabbs_.size() * sizeof(OptixAabb) / 1024 / 1024;
+    uint32_t total_mb = bvh_buf_mb + geometries_mb + aabbs_mb;
+    std::cout << "BVH " << bvh_buf_mb << " MB, "
+              << "Geometries " << geometries_mb << " MB, "
+              << "AABBs " << aabbs_mb << " MB, "
+              << "Total " << total_mb << " MB" << std::endl;
+  }
+
  private:
   Stream extra_stream_;
   Config config_;
