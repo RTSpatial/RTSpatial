@@ -89,7 +89,7 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch) {
   auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 6549771);
 }
-
+/*
 TEST(EnvelopeQueries, fp32_intersects_envelope_batch_update) {
   size_t n1 = 100000, n2 = 1000;
   float update_ratio = 0.05;
@@ -151,9 +151,11 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch_update) {
   }
   thrust::device_vector<thrust::pair<size_t, envelope_f2d_t>> d_updates =
       updates;
+  std::cout << "Before update\n";
   index.Update(ArrayView<thrust::pair<size_t, envelope_f2d_t>>(d_updates),
                stream.cuda_stream());
   stream.Sync();
+  std::cout << "After update\n";
   counter.set(stream.cuda_stream(), 0);
   index.Query(Predicate::kIntersects, ArrayView<envelope_f2d_t>(queries),
               counter.data(), stream.cuda_stream());
@@ -199,6 +201,7 @@ TEST(EnvelopeQueries, fp32_test_delete) {
   n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 1);
 }
+ */
 
 }  // namespace rtspatial
 

@@ -149,18 +149,18 @@ class RTEngine {
   OptixTraversableHandle BuildAccelCustom(cudaStream_t cuda_stream,
                                           ArrayView<OptixAabb> aabbs,
                                           ReusableBuffer& buf,
-                                          bool prefer_fast_build = false) {
-    return buildAccel(cuda_stream, aabbs, buf, prefer_fast_build);
+                                          bool prefer_fast_build = false,
+                                          bool compact = false) {
+    return buildAccel(cuda_stream, aabbs, buf, prefer_fast_build, compact);
   }
 
   OptixTraversableHandle BuildAccelCustom(cudaStream_t cuda_stream,
                                           ArrayView<OptixAabb> aabbs,
-                                          char* buffer,
-                                          size_t buffer_size,
+                                          char* buffer, size_t buffer_size,
                                           ReusableBuffer& buf,
-
                                           bool prefer_fast_build = false) {
-    return buildAccel(cuda_stream, aabbs, buffer,buffer_size, buf, prefer_fast_build);
+    return buildAccel(cuda_stream, aabbs, buffer, buffer_size, buf,
+                      prefer_fast_build, false);
   }
 
   OptixTraversableHandle UpdateAccelCustom(cudaStream_t cuda_stream,
@@ -168,9 +168,10 @@ class RTEngine {
                                            ArrayView<OptixAabb> aabbs,
                                            ReusableBuffer& buf,
                                            size_t buf_offset,
-                                           bool prefer_fast_build = false) {
+                                           bool prefer_fast_build = false,
+                                           bool compact = false) {
     return updateAccel(cuda_stream, handle, aabbs, buf, buf_offset,
-                       prefer_fast_build);
+                       prefer_fast_build, compact);
   }
 
   OptixTraversableHandle BuildInstanceAccel(
@@ -239,7 +240,8 @@ class RTEngine {
 
   OptixDeviceContext get_context() const { return optix_context_; }
 
-  size_t EstimateMemoryUsageForAABB(size_t num_aabbs, bool prefer_fast_build);
+  size_t EstimateMemoryUsageForAABB(size_t num_aabbs, bool prefer_fast_build,
+                                    bool compact);
 
   size_t EstimateMemoryUsageForTriangle(size_t num_aabbs,
                                         bool prefer_fast_build);
@@ -263,19 +265,21 @@ class RTEngine {
 
   OptixTraversableHandle buildAccel(cudaStream_t cuda_stream,
                                     ArrayView<OptixAabb> aabbs,
-                                    ReusableBuffer& buf,
-                                    bool prefer_fast_build);
+                                    ReusableBuffer& buf, bool prefer_fast_build,
+                                    bool compact = false);
 
   OptixTraversableHandle buildAccel(cudaStream_t cuda_stream,
                                     ArrayView<OptixAabb> aabbs, char* buffer,
                                     size_t buffer_size, ReusableBuffer& buf,
-                                    bool prefer_fast_build);
+                                    bool prefer_fast_build,
+                                    bool compact = false);
 
   OptixTraversableHandle updateAccel(cudaStream_t cuda_stream,
                                      OptixTraversableHandle handle,
                                      ArrayView<OptixAabb> aabbs,
                                      ReusableBuffer& buf, size_t buf_offset,
-                                     bool prefer_fast_build);
+                                     bool prefer_fast_build,
+                                     bool compact);
 
   OptixTraversableHandle buildInstanceAccel(cudaStream_t cuda_stream,
                                             ArrayView<OptixInstance> instances,

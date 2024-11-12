@@ -406,7 +406,8 @@ void RTEngine::buildSBT(const RTConfig& config) {
 OptixTraversableHandle RTEngine::buildAccel(cudaStream_t cuda_stream,
                                             ArrayView<OptixAabb> aabbs,
                                             ReusableBuffer& buf,
-                                            bool prefer_fast_build) {
+                                            bool prefer_fast_build,
+                                            bool compact) {
   OptixTraversableHandle traversable;
   OptixBuildInput build_input = {};
   CUdeviceptr d_aabb = THRUST_TO_CUPTR(aabbs.data());
@@ -436,6 +437,10 @@ OptixTraversableHandle RTEngine::buildAccel(cudaStream_t cuda_stream,
   } else {
     accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
   }
+  if (compact) {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_ALLOW_COMPACTION;
+  }
+
   accelOptions.motionOptions.numKeys = 1;
   accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
 
@@ -449,14 +454,35 @@ OptixTraversableHandle RTEngine::buildAccel(cudaStream_t cuda_stream,
   buf.Acquire(getAccelAlignedSize(buf.GetTail()) - buf.GetTail());
   char* out_buf = buf.Acquire(blas_buffer_sizes.outputSizeInBytes);
   char* temp_buf = buf.Acquire(blas_buffer_sizes.tempSizeInBytes);
+  OptixAccelEmitDesc emitDesc;
+  emitDesc.type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
+  emitDesc.result = reinterpret_cast<CUdeviceptr>(compacted_size_.data());
 
-  OPTIX_CHECK(optixAccelBuild(
-      optix_context_, cuda_stream, &accelOptions, &build_input, 1,
-      reinterpret_cast<CUdeviceptr>(temp_buf),
-      blas_buffer_sizes.tempSizeInBytes, reinterpret_cast<CUdeviceptr>(out_buf),
-      blas_buffer_sizes.outputSizeInBytes, &traversable, nullptr, 0));
+  if (compact) {
+    OPTIX_CHECK(optixAccelBuild(
+        optix_context_, cuda_stream, &accelOptions, &build_input, 1,
+        reinterpret_cast<CUdeviceptr>(temp_buf),
+        blas_buffer_sizes.tempSizeInBytes,
+        reinterpret_cast<CUdeviceptr>(out_buf),
+        blas_buffer_sizes.outputSizeInBytes, &traversable, &emitDesc, 1));
 
-  buf.Release(blas_buffer_sizes.tempSizeInBytes);
+    auto compacted_size = compacted_size_.get(cuda_stream);
+    OPTIX_CHECK(optixAccelCompact(optix_context_, cuda_stream, traversable,
+                                  reinterpret_cast<CUdeviceptr>(out_buf),
+                                  compacted_size, &traversable));
+    buf.Release(blas_buffer_sizes.tempSizeInBytes);
+    buf.Release(blas_buffer_sizes.outputSizeInBytes - compacted_size);
+  } else {
+    OPTIX_CHECK(optixAccelBuild(
+        optix_context_, cuda_stream, &accelOptions, &build_input, 1,
+        reinterpret_cast<CUdeviceptr>(temp_buf),
+        blas_buffer_sizes.tempSizeInBytes,
+        reinterpret_cast<CUdeviceptr>(out_buf),
+        blas_buffer_sizes.outputSizeInBytes, &traversable, nullptr, 0));
+
+    buf.Release(blas_buffer_sizes.tempSizeInBytes);
+  }
+
   return traversable;
 }
 
@@ -464,7 +490,8 @@ OptixTraversableHandle RTEngine::buildAccel(cudaStream_t cuda_stream,
                                             ArrayView<OptixAabb> aabbs,
                                             char* buffer, size_t buffer_size,
                                             ReusableBuffer& buf,
-                                            bool prefer_fast_build) {
+                                            bool prefer_fast_build,
+                                            bool compact) {
   OptixTraversableHandle traversable;
   OptixBuildInput build_input = {};
   CUdeviceptr d_aabb = THRUST_TO_CUPTR(aabbs.data());
@@ -522,15 +549,14 @@ OptixTraversableHandle RTEngine::buildAccel(cudaStream_t cuda_stream,
       blas_buffer_sizes.outputSizeInBytes, &traversable, nullptr, 0));
 
   buf.Release(blas_buffer_sizes.tempSizeInBytes);
+  // TODO: compact
   return traversable;
 }
 
-OptixTraversableHandle RTEngine::updateAccel(cudaStream_t cuda_stream,
-                                             OptixTraversableHandle handle,
-                                             ArrayView<OptixAabb> aabbs,
-                                             ReusableBuffer& buf,
-                                             size_t buf_offset,
-                                             bool prefer_fast_build) {
+OptixTraversableHandle RTEngine::updateAccel(
+    cudaStream_t cuda_stream, OptixTraversableHandle handle,
+    ArrayView<OptixAabb> aabbs, ReusableBuffer& buf, size_t buf_offset,
+    bool prefer_fast_build, bool compact) {
   OptixBuildInput build_input = {};
   CUdeviceptr d_aabb = THRUST_TO_CUPTR(aabbs.data());
   // Setup AABB build input. Don't disable AH.
@@ -564,6 +590,9 @@ OptixTraversableHandle RTEngine::updateAccel(cudaStream_t cuda_stream,
     accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
   } else {
     accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+  }
+  if (compact) {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_ALLOW_COMPACTION;
   }
 
   OptixAccelBufferSizes blas_buffer_sizes;
@@ -685,7 +714,8 @@ void RTEngine::Render(cudaStream_t cuda_stream, ModuleIdentifier mod,
 }
 
 size_t RTEngine::EstimateMemoryUsageForAABB(size_t num_aabbs,
-                                            bool prefer_fast_build) {
+                                            bool prefer_fast_build,
+                                            bool compact) {
   OptixBuildInput build_input = {};
   uint32_t build_input_flags[1] = {OPTIX_GEOMETRY_FLAG_NONE};
 
@@ -705,6 +735,9 @@ size_t RTEngine::EstimateMemoryUsageForAABB(size_t num_aabbs,
     accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_BUILD;
   } else {
     accelOptions.buildFlags |= OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+  }
+  if (compact) {
+    accelOptions.buildFlags |= OPTIX_BUILD_FLAG_ALLOW_COMPACTION;
   }
   accelOptions.motionOptions.numKeys = 1;
   accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;

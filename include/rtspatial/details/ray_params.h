@@ -139,6 +139,7 @@ struct RayParams<float, 2> {
     const auto* pMin = reinterpret_cast<const float*>(&envelope.get_min());
     const auto* pMax = reinterpret_cast<const float*>(&envelope.get_max());
 
+#pragma unroll
     for (int i = 0; i < 2; ++i) {
       // Update interval for _i_th bounding box slab
       float invRayDir = 1 / reinterpret_cast<const float*>(&d)[i];

@@ -95,12 +95,20 @@ int main(int argc, char* argv[]) {
     if (predicate == "contains") {
       index.Query(Predicate::kContains, v_queries, d_results.data(),
                   stream.cuda_stream());
-    } else if (predicate == "intersects") {
+    } else if (predicate == "intersects_p") {
+      Stopwatch sw;
+      sw.start();
       int best_parallelism =
           index.CalculateBestParallelism(v_queries, stream.cuda_stream());
-
+      sw.stop();
+      std::cout << "Predicated parallelism " << best_parallelism << " time "
+                << sw.ms() << std::endl;
+      best_parallelism = FLAGS_parallelism;
       index.IntersectsWhatQueryProfiling(
           v_queries, d_results.data(), stream.cuda_stream(), best_parallelism);
+    } else if (predicate == "intersects") {
+      index.Query(Predicate::kIntersects, v_queries, d_results.data(),
+                  stream.cuda_stream());
     } else {
       std::cout << "Unsupported predicate\n";
       abort();

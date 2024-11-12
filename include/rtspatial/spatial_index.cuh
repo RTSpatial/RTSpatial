@@ -26,10 +26,11 @@ struct Config {
   bool preallocate = false;
   bool prefer_fast_build_geom = false;
   bool prefer_fast_build_query = false;
+  bool compact = false;
   // Parallelism prediction
   float geom_sample_rate = 0.2;
   float query_sample_rate = 0.2;
-  float intersect_cost_weight = 0.9;
+  float intersect_cost_weight = 0.95;
   uint32_t max_geom_samples = 10000;
   uint32_t max_query_samples = 1000;
   uint32_t max_parallelism = 512;
@@ -80,9 +81,9 @@ class SpatialIndex {
     size_t buf_size = 0;
 
     buf_size += rt_engine_.EstimateMemoryUsageForAABB(
-        config.max_geometries, config.prefer_fast_build_geom);
+        config.max_geometries, config.prefer_fast_build_geom, config.compact);
     buf_size += rt_engine_.EstimateMemoryUsageForAABB(
-        config.max_queries, config.prefer_fast_build_query);
+        config.max_queries, config.prefer_fast_build_query, false);
     // FIXME: Reserve space to IAS, implement EstimateMemoryUsageIAS
     buf_size *= 1.1;
     buf_size += sizeof(OptixAabb) * config.max_queries;
@@ -150,7 +151,7 @@ class SpatialIndex {
         ArrayView<OptixAabb>(
             thrust::raw_pointer_cast(aabbs_.data()) + prev_size,
             envelopes.size()),
-        reuse_buf_, config_.prefer_fast_build_geom);
+        reuse_buf_, config_.prefer_fast_build_geom, config_.compact);
 
     as_buf_size = reuse_buf_.GetOccupiedSize() - as_buf_size;
     handle_to_as_buf_[handle] = std::make_pair(gas_buf, as_buf_size);
@@ -256,7 +257,6 @@ class SpatialIndex {
         });
 
     auto touched_batch_ids = touched_batch_ids_.DumpPositives(stream);
-
     for (auto batch_id : touched_batch_ids) {
       auto handle = gas_handles_[batch_id];
       auto& buf_size = handle_to_as_buf_.at(handle);
@@ -268,7 +268,7 @@ class SpatialIndex {
           stream, handle,
           ArrayView<OptixAabb>(thrust::raw_pointer_cast(aabbs_.data()) + begin,
                                size),
-          reuse_buf_, offset, config_.prefer_fast_build_geom);
+          reuse_buf_, offset, config_.prefer_fast_build_geom, config_.compact);
       // Updating does not change the handle
       assert(new_handle == handle);
     }
@@ -407,9 +407,7 @@ class SpatialIndex {
 
       rt_engine_.CopyLaunchParams(cuda_stream, params);
       rt_engine_.Render(cuda_stream, id, dims);
-
       int parallelism = CalculateBestParallelism(queries, cuda_stream);
-
       size_t curr_buf_size = reuse_buf_.GetOccupiedSize();
       size_t query_aabbs_size = sizeof(OptixAabb) * queries.size();
       ArrayView<OptixAabb> aabbs_queries(
@@ -427,12 +425,17 @@ class SpatialIndex {
 
       OptixTraversableHandle handle =
           rt_engine_.BuildAccelCustom(cuda_stream, aabbs_queries, reuse_buf_,
-                                      config_.prefer_fast_build_query);
+                                      config_.prefer_fast_build_query, false);
 
       // Ray tracing from base envelopes
       params.handle = handle;
       dims.x = params.geoms.size();
       dims.y = parallelism;
+      uint32_t max_size = 1 << 30;
+
+      if (dims.x * dims.y > max_size) {
+        dims.x = max_size / dims.y;
+      }
 
       if (std::is_same<COORD_T, float>::value) {
         id = details::ModuleIdentifier::
@@ -570,7 +573,7 @@ class SpatialIndex {
 
     OptixTraversableHandle handle =
         rt_engine_.BuildAccelCustom(cuda_stream, aabbs_queries, reuse_buf_,
-                                    config_.prefer_fast_build_query);
+                                    config_.prefer_fast_build_query, false);
 
     CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
     sw.stop();
@@ -661,6 +664,7 @@ class SpatialIndex {
 
     auto min_cost = std::numeric_limits<double>::max();
     int parallelism = 1;
+//    std::cout << "predicated selectivity " << selectivity << std::endl;
 
     while (parallelism < config_.max_parallelism) {
       double per_ray_search_costs = log10(n_queries);
@@ -669,6 +673,8 @@ class SpatialIndex {
       double cost = (1 - config_.intersect_cost_weight) * cast_rays_costs +
                     config_.intersect_cost_weight * intersect_costs;
 
+//      std::cout << "curr cost " << min_cost << " cost " << cost
+//                << " parallelsim " << parallelism << " cast cost " << cast_rays_costs << " intersect cost " << intersect_costs << std::endl;
       if (cost < min_cost) {
         min_cost = cost;
         best_parallelism = parallelism;
