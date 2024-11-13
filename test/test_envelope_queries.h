@@ -89,7 +89,7 @@ TEST(EnvelopeQueries, fp32_intersects_envelope_batch) {
   auto n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 6549771);
 }
-/*
+
 TEST(EnvelopeQueries, fp32_intersects_envelope_batch_update) {
   size_t n1 = 100000, n2 = 1000;
   float update_ratio = 0.05;
@@ -195,14 +195,54 @@ TEST(EnvelopeQueries, fp32_test_delete) {
 
   index.Delete(ArrayView<size_t>(deleted_ids), stream.cuda_stream());
   counter.set(stream.cuda_stream(), 0);
+  stream.Sync();
   index.Query(Predicate::kIntersects,
               ArrayView<envelope_f2d_t>(query_envelopes), counter.data(),
               stream.cuda_stream());
   n_res = counter.get(stream.cuda_stream());
   ASSERT_EQ(n_res, 1);
 }
- */
 
+TEST(EnvelopeQueries, fp32_test_delete_compact) {
+  spatial_index_f2d_t index;
+  pinned_vector<envelope_f2d_t> envelopes;
+  pinned_vector<envelope_f2d_t> query_envelopes;
+
+  envelopes.push_back(envelope_f2d_t(point_f2d_t(0, 0), point_f2d_t(1, 1)));
+
+  envelopes.push_back(
+      envelope_f2d_t(point_f2d_t(0.5, -0.5), point_f2d_t(1.5, 0.5)));
+
+  query_envelopes.push_back(
+      envelope_f2d_t(point_f2d_t(0.75, 0.25), point_f2d_t(1.25, 0.75)));
+
+  Stream stream;
+  Config config;
+  config.ptx_root = ptx_root;
+  config.compact = true;
+
+  index.Init(config);
+  index.Insert(ArrayView<envelope_f2d_t>(envelopes), stream.cuda_stream());
+  counter.set(stream.cuda_stream(), 0);
+  index.Query(Predicate::kIntersects,
+              ArrayView<envelope_f2d_t>(query_envelopes), counter.data(),
+              stream.cuda_stream());
+  auto n_res = counter.get(stream.cuda_stream());
+  ASSERT_EQ(n_res, 2);
+
+  thrust::device_vector<size_t> deleted_ids;
+
+  deleted_ids.push_back(1);
+
+  index.Delete(ArrayView<size_t>(deleted_ids), stream.cuda_stream());
+  counter.set(stream.cuda_stream(), 0);
+  stream.Sync();
+  index.Query(Predicate::kIntersects,
+              ArrayView<envelope_f2d_t>(query_envelopes), counter.data(),
+              stream.cuda_stream());
+  n_res = counter.get(stream.cuda_stream());
+  ASSERT_EQ(n_res, 1);
+}
 }  // namespace rtspatial
 
 #endif  // RTSPATIAL_TESTS_TEST_ENVELOPE_QUERIES_H

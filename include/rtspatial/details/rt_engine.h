@@ -733,40 +733,26 @@ class RTEngine {
 
     if (compact) {
       // Layout: |Out Buf|Temp Buf|Compact Buf|
-      //      char* out_buf = buf.Acquire(blas_buffer_sizes.outputSizeInBytes);
-      //      char* temp_buf = buf.Acquire(blas_buffer_sizes.tempSizeInBytes);
-      thrust::device_vector<char> out_buf(blas_buffer_sizes.outputSizeInBytes);
-      thrust::device_vector<char> temp_buf(blas_buffer_sizes.tempSizeInBytes);
+      char* compressed_buf = buf.Acquire(blas_buffer_sizes.outputSizeInBytes);
+      char* out_buf = buf.Acquire(blas_buffer_sizes.outputSizeInBytes);
+      char* temp_buf = buf.Acquire(blas_buffer_sizes.tempSizeInBytes);
 
       OPTIX_CHECK(optixAccelBuild(
           optix_context_, cuda_stream, &accelOptions, &build_input, 1,
-          reinterpret_cast<CUdeviceptr>(
-              thrust::raw_pointer_cast(temp_buf.data())),
+          reinterpret_cast<CUdeviceptr>(temp_buf),
           blas_buffer_sizes.tempSizeInBytes,
-          reinterpret_cast<CUdeviceptr>(
-              thrust::raw_pointer_cast(out_buf.data())),
+          reinterpret_cast<CUdeviceptr>(out_buf),
           blas_buffer_sizes.outputSizeInBytes, &traversable, &emitDesc, 1));
 
       auto compacted_size = compacted_size_.get(cuda_stream);
-      auto* compacted_as_begin = buf.Acquire(compacted_size);
 
       OPTIX_CHECK(
           optixAccelCompact(optix_context_, cuda_stream, traversable,
-                            reinterpret_cast<CUdeviceptr>(compacted_as_begin),
+                            reinterpret_cast<CUdeviceptr>(compressed_buf),
                             compacted_size, &traversable));
 
-      //      CUDA_CHECK(cudaMemcpyAsync(out_buf, compacted_as_begin,
-      //      compacted_size,
-      //                                 cudaMemcpyDeviceToDevice,
-      //                                 cuda_stream));
-      //      OptixRelocationInfo gasInfo = {};
-      //      optixAccelRelocate(optix_context_, 0, &gasInfo, 0, 0,
-      //                         reinterpret_cast<CUdeviceptr>(out_buf),
-      //                         compacted_size, &traversable);
-
-      //      buf.Release(blas_buffer_sizes.outputSizeInBytes +
-      //                  blas_buffer_sizes.tempSizeInBytes);
-      buf.Release(compacted_size);
+      buf.Release(blas_buffer_sizes.outputSizeInBytes +
+                  blas_buffer_sizes.tempSizeInBytes);
     } else {
       char* out_buf = buf.Acquire(blas_buffer_sizes.outputSizeInBytes);
       char* temp_buf = buf.Acquire(blas_buffer_sizes.tempSizeInBytes);

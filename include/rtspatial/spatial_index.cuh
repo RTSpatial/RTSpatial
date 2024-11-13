@@ -78,9 +78,7 @@ class SpatialIndex {
 
     rt_engine_.Init(rt_config);
 
-    size_t buf_size = 0;
-
-    buf_size += rt_engine_.EstimateMemoryUsageForAABB(
+    auto buf_size = rt_engine_.EstimateMemoryUsageForAABB(
         config.max_geometries, config.prefer_fast_build_geom, config.compact);
     buf_size += rt_engine_.EstimateMemoryUsageForAABB(
         config.max_queries, config.prefer_fast_build_query, false);
@@ -210,7 +208,7 @@ class SpatialIndex {
           stream, handle,
           ArrayView<OptixAabb>(thrust::raw_pointer_cast(aabbs_.data()) + begin,
                                size),
-          reuse_buf_, offset, config_.prefer_fast_build_geom);
+          reuse_buf_, offset, config_.prefer_fast_build_geom, config_.compact);
       // Updating does not change the handle
       assert(new_handle == handle);
     }
@@ -218,7 +216,6 @@ class SpatialIndex {
     if (!touched_batch_ids.empty()) {
       // Update IAS
       auto as_buf = handle_to_as_buf_.at(ias_handle_);
-      auto& buf_size = as_buf.second;
       size_t offset = as_buf.first - reuse_buf_.GetData();
 
       // Handle should not be changed
@@ -667,7 +664,7 @@ class SpatialIndex {
 
     auto min_cost = std::numeric_limits<double>::max();
     int parallelism = 1;
-//    std::cout << "predicated selectivity " << selectivity << std::endl;
+    //    std::cout << "predicated selectivity " << selectivity << std::endl;
 
     while (parallelism < config_.max_parallelism) {
       double per_ray_search_costs = log10(n_queries);
@@ -676,8 +673,10 @@ class SpatialIndex {
       double cost = (1 - config_.intersect_cost_weight) * cast_rays_costs +
                     config_.intersect_cost_weight * intersect_costs;
 
-//      std::cout << "curr cost " << min_cost << " cost " << cost
-//                << " parallelsim " << parallelism << " cast cost " << cast_rays_costs << " intersect cost " << intersect_costs << std::endl;
+      //      std::cout << "curr cost " << min_cost << " cost " << cost
+      //                << " parallelsim " << parallelism << " cast cost " <<
+      //                cast_rays_costs << " intersect cost " << intersect_costs
+      //                << std::endl;
       if (cost < min_cost) {
         min_cost = cost;
         best_parallelism = parallelism;
