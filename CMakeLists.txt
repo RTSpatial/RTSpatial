@@ -14,6 +14,9 @@ set(RTSPATIAL_LIB_VERSION "1.0")
 
 set(ENABLED_ARCHS "80")
 
+option(BUILD_EXAMPLES "Whether to build examples" OFF)
+option(BUILD_TESTS "Whether to build tests" OFF)
+
 if (NOT WIN32)
     # visual studio doesn't like these (not need them):
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --std=c++17")
@@ -105,5 +108,10 @@ ENDFUNCTION()
 # ------------------------------------------------------------------
 
 add_subdirectory(src)
-add_subdirectory(examples)
-add_subdirectory(test)
+if (BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif ()
+
+if (BUILD_TESTS)
+    add_subdirectory(test)
+endif ()

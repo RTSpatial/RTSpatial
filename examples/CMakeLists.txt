@@ -15,7 +15,7 @@ RTSPATIAL_COMPILE_SHADERS("${PROJECT_SOURCE_DIR}/include/rtspatial/default_handl
 # Experiments
 add_executable(rtspatial_exec spatial_index.cu flags.cpp ${PROGRAM_MODULES})
 
-target_link_libraries(rtspatial_exec rtspatial ${GFLAGS_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(rtspatial_exec cuda ${GFLAGS_LIBRARIES} ${Boost_LIBRARIES})
 target_compile_options(rtspatial_exec PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda --expt-relaxed-constexpr --use_fast_math>)
 target_compile_options(rtspatial_exec PRIVATE -DPTX_ROOT="${MODULE_TARGET_DIR}/examples_ptx")
 set_target_properties(rtspatial_exec PROPERTIES CUDA_ARCHITECTURES "${ENABLED_ARCHS}" CUDA_SEPARABLE_COMPILATION ON)
