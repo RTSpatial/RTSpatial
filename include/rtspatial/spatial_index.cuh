@@ -274,7 +274,6 @@ class SpatialIndex {
     if (!touched_batch_ids.empty()) {
       // Update IAS
       auto as_buf = handle_to_as_buf_.at(ias_handle_);
-      auto& buf_size = as_buf.second;
       size_t offset = as_buf.first - reuse_buf_.GetData();
 
       // Handle should not be changed

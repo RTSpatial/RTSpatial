@@ -134,7 +134,7 @@ struct RTConfig {
   int n_pipelines;
 };
 
-RTConfig get_default_rt_config(const std::string& ptx_root) {
+inline RTConfig get_default_rt_config(const std::string& ptx_root) {
   RTConfig config;
 
   {
