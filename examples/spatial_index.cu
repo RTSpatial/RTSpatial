@@ -1,4 +1,7 @@
+#include <optix_function_table_definition.h>
+
 #include "flags.h"
+
 #include "rtspatial/spatial_index.cuh"
 #include "rtspatial/utils/stream.h"
 #include "wkt_loader.h"

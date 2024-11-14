@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-
+#include <optix_function_table_definition.h>
 #include "test_commons.h"
 #include "test_envelope_queries.h"
 #include "test_point_queries.h"

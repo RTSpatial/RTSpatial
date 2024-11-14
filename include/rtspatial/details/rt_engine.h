@@ -1,7 +1,7 @@
 #ifndef RTSPATIAL_DETAILS_RT_ENGINE_H
 #define RTSPATIAL_DETAILS_RT_ENGINE_H
 #include <cuda.h>
-#include <optix_function_table_definition.h>  // for g_optixFunctionTable
+// #include <optix_function_table_definition.h>  // for g_optixFunctionTable
 #include <optix_host.h>
 #include <optix_stack_size.h>
 #include <optix_stubs.h>
