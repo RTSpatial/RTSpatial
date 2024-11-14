@@ -261,14 +261,11 @@ class SpatialIndex {
       auto size = h_prefix_sum_[batch_id + 1] - begin;
       size_t offset = buf_size.first - reuse_buf_.GetData();
 
-      std::cout << "Update begin\n";
       auto new_handle = rt_engine_.UpdateAccelCustom(
           stream, handle,
           ArrayView<OptixAabb>(thrust::raw_pointer_cast(aabbs_.data()) + begin,
                                size),
           reuse_buf_, offset, config_.prefer_fast_build_geom, config_.compact);
-      CUDA_CHECK(cudaStreamSynchronize(stream));
-      std::cout << "Update end\n";
       // Updating does not change the handle
       assert(new_handle == handle);
     }

@@ -12,7 +12,7 @@ set(RTSPATIAL_VERSION_STRING
         "${RTSPATIAL_VERSION_MAJOR}.${RTSPATIAL_VERSION_MINOR}")
 set(RTSPATIAL_LIB_VERSION "1.0")
 
-set(ENABLED_ARCHS "80")
+set(ENABLED_ARCHS "75")
 
 option(BUILD_EXAMPLES "Whether to build examples" OFF)
 option(BUILD_TESTS "Whether to build tests" OFF)
