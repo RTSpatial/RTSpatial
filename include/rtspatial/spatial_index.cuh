@@ -581,6 +581,12 @@ class SpatialIndex {
     dims.x = params.geoms.size();
     dims.y = parallelism;
 
+    uint32_t max_size = 1 << 30;
+
+    if (dims.x * dims.y > max_size) {
+      dims.x = max_size / dims.y;
+    }
+
     if (std::is_same<COORD_T, float>::value) {
       id = details::ModuleIdentifier::
           MODULE_ID_FLOAT_INTERSECTS_ENVELOPE_QUERY_2D_BACKWARD;
