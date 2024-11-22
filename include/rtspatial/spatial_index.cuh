@@ -69,6 +69,17 @@ class SpatialIndex {
   using envelope_t = Envelope<point_t>;
   using line_t = Line<point_t>;
 
+  /**
+   * @brief Initializes the OptiX ray tracing framework and preallocates memory
+   * for internal data structures.
+   *
+   * This method sets up the OptiX framework required for ray tracing operations
+   * and ensures that sufficient memory space is reserved for the framework's
+   * internal data structures.
+   *
+   * @param config A `Config` object containing the necessary parameters for
+   * initialization.
+   */
   void Init(const Config& config) {
     config_ = config;
     details::RTConfig rt_config =
@@ -98,6 +109,12 @@ class SpatialIndex {
     Clear();
   }
 
+  /**
+   * @brief Removes all geometries from the index.
+   *
+   * This method clears all stored geometries, leaving the index empty and ready
+   * for new data.
+   */
   void Clear() {
     reuse_buf_.Clear();
     ias_handle_ = 0;
@@ -111,6 +128,17 @@ class SpatialIndex {
     aabbs_.clear();
   }
 
+  /**
+   * @brief Inserts an array of envelopes into the index.
+   *
+   * This method adds multiple `envelope_t` objects to the index for spatial
+   * data queries. Each inserted envelope is automatically assigned an implicit
+   * ID, starting from zero, which can be used for future updates or deletions.
+   *
+   * @param envelopes An `ArrayView` object containing the `envelope_t`
+   * instances to be inserted.
+   * @param cuda_stream The CUDA stream used to manage asynchronous operations.
+   */
   void Insert(ArrayView<envelope_t> envelopes,
               cudaStream_t cuda_stream = nullptr) {
     if (envelopes.empty()) {
@@ -167,6 +195,16 @@ class SpatialIndex {
     d_prefix_sum_ = h_prefix_sum_;
   }
 
+  /**
+   * @brief Deletes an array of envelopes from the index.
+   *
+   * This method removes geometries from the index based on their IDs.
+   *
+   * @param envelopes An `ArrayView` object containing the IDs of the geometries
+   * to be deleted.
+   * @param cuda_stream The CUDA stream used to manage asynchronous deletion
+   * operations.
+   */
   void Delete(const ArrayView<size_t> envelope_ids, cudaStream_t stream) {
     touched_batch_ids_.Init(d_prefix_sum_.size() - 1);
     ArrayView<envelope_t> v_envelopes(envelopes_);
@@ -226,6 +264,19 @@ class SpatialIndex {
     }
   }
 
+  /**
+   * @brief Updates envelopes in the index.
+   *
+   * This method modifies existing envelopes in the index based on their IDs.
+   * Each update is specified as a `thrust::pair`, where the key represents the
+   * envelope's ID and the value is the new envelope to replace the existing
+   * one.
+   *
+   * @param envelopes An `ArrayView` object containing an array of
+   * `thrust::pair` objects. The key is the ID of the envelope, and the value is
+   * the updated envelope.
+   * @param cuda_stream The CUDA stream used to manage asynchronous operations.
+   */
   void Update(const ArrayView<thrust::pair<size_t, envelope_t>> updates,
               cudaStream_t stream) {
     touched_batch_ids_.Init(d_prefix_sum_.size() - 1);
@@ -285,11 +336,18 @@ class SpatialIndex {
   }
 
   /**
-   * Return the geometries in the index that satisfy p with the queries
-   * @param p predicate
-   * @param queries query points
-   * @param arg argument passing into the callback handler
-   * @param cuda_stream CUDA stream
+   * @brief Executes point queries on the index.
+   *
+   * This method performs point-based spatial queries on the index. For each
+   * envelope in the index that satisfies the given predicate, a callback
+   * handler is invoked.
+   *
+   * @param p The predicate used to filter envelopes in the index.
+   * @param queries A collection of points representing the query input.
+   * @param arg An argument passed to the callback handler for processing
+   * matched envelopes.
+   * @param cuda_stream The CUDA stream used to manage asynchronous query
+   * execution.
    */
   void Query(Predicate p, ArrayView<point_t> queries, void* arg,
              cudaStream_t cuda_stream = nullptr) {
@@ -333,11 +391,18 @@ class SpatialIndex {
   }
 
   /**
-   * Return the geometries in the index that satisfy p with the queries
-   * @param p predicate
-   * @param queries Query envelopes
-   * @param arg argument passing into the callback handler
-   * @param cuda_stream CUDA stream
+   * @brief Executes range queries on the index.
+   *
+   * This method performs range-based spatial queries on the index. For each
+   * envelope in the index that satisfies the given predicate, a callback
+   * handler is invoked.
+   *
+   * @param p The predicate used to filter envelopes in the index.
+   * @param queries A collection of envelopes representing the query ranges.
+   * @param arg An argument passed to the callback handler for processing
+   * matched envelopes.
+   * @param cuda_stream The CUDA stream used to manage asynchronous query
+   * execution.
    */
   void Query(Predicate p, ArrayView<envelope_t> queries, void* arg,
              cudaStream_t cuda_stream = nullptr) {
@@ -493,7 +558,7 @@ class SpatialIndex {
   }
 
   /**
-   * Return the geometries in the index that intersects the query envelopes
+   * @brief Internal Method
    * @param queries Query envelopes
    * @param arg argument passing into the callback handler
    * @param cuda_stream CUDA stream
@@ -617,6 +682,11 @@ class SpatialIndex {
               << n_results_backward << std::endl;
   }
 
+  /**
+   * @brief Internal Method
+   * @param queries
+   * @param cuda_stream
+   */
   int CalculateBestParallelism(ArrayView<envelope_t> queries,
                                cudaStream_t cuda_stream = nullptr) {
     int best_parallelism = 1;
@@ -689,6 +759,10 @@ class SpatialIndex {
     return best_parallelism;
   }
 
+  /**
+   * @brief Internal Method
+   * @param cuda_stream
+   */
   void Optimize(cudaStream_t cuda_stream = nullptr) {
     auto gas_num = gas_handles_.size();
     if (gas_num == 0) {
@@ -813,6 +887,9 @@ class SpatialIndex {
     return std::make_tuple(size_list, buffer_list, handle_list);
   }
 
+  /**
+   * @brief Internal Method
+   */
   void PrintMemoryUsage() {
     uint32_t bvh_buf_mb = reuse_buf_.GetCapacity() / 1024 / 1024;
     uint32_t geometries_mb =
