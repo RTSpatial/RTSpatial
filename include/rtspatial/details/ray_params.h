@@ -31,6 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define RTSPATIAL_DETAILS_RAY_PARAMS_H
 #include <optix.h>
 #include <thrust/swap.h>
+#include <cfloat>
 
 #include "rtspatial/geom/envelope.cuh"
 #include "rtspatial/geom/line.cuh"
