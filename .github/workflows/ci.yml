@@ -13,7 +13,7 @@ jobs:
         run: |
           mkdir debug
           cd debug
-          cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DCMAKE_PREFIX_PATH=/local/storage/liang/.local -DOptiX_INSTALL_DIR=/home/geng.161/.local/NVIDIA-OptiX-SDK-8.0.0-linux64-x86_64
+          cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DBUILD_EXAMPLES=ON -DCMAKE_PREFIX_PATH=/local/storage/liang/.local -DOptiX_INSTALL_DIR=/home/geng.161/.local/NVIDIA-OptiX-SDK-8.0.0-linux64-x86_64
           make
       - name: Test Debug
         run: |
@@ -24,7 +24,7 @@ jobs:
         run: |
           mkdir release
           cd release
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DCMAKE_PREFIX_PATH=/local/storage/liang/.local -DOptiX_INSTALL_DIR=/home/geng.161/.local/NVIDIA-OptiX-SDK-8.0.0-linux64-x86_64
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_EXAMPLES=ON -DCMAKE_PREFIX_PATH=/local/storage/liang/.local -DOptiX_INSTALL_DIR=/home/geng.161/.local/NVIDIA-OptiX-SDK-8.0.0-linux64-x86_64
           make
       - name: Test Release
         run: |
